@@ -1,0 +1,130 @@
+#! /usr/bin/env python
+import pooltool as pt
+from pooltool.ruleset.three_cushion import is_point
+
+# from pooltool.physics.resolve.resolver import RESOLVER_CONFIG_PATH
+# print(RESOLVER_CONFIG_PATH)
+
+# We need a table, some balls, and a cue stick
+# table = pt.Table.default("billiard")
+
+# Ball Positions
+wpos = (0.5, 1.0)  # White
+ypos = (1.1, 1.0)  # Yellow
+rpos = (0.08, 0.5)  # Red
+
+# shot props
+sidespin = 0.0
+vertspin = 0.0
+cuespeed = 2.5
+cutangle = -87
+cueincline = 45
+
+# define the properties
+u_slide = 0.15
+u_roll = 0.005
+u_sp_prop = 10 * 2 / 5 / 9
+u_ballball = 0.05
+e_ballball = 0.95
+e_cushion = 0.9
+f_cushion = 0.15
+grav = 9.81
+
+mball = 0.210
+Rball = 61.5 / 1000 / 2
+
+cue_mass = 0.576
+cue_len = 1.47
+cue_tip_R = 0.022
+cue_tip_mass = 0.0000000001
+
+# Build a table with default BILLIARD specs
+table = pt.Table.default(pt.TableType.BILLIARD)
+
+# create the cue
+cue_specs = pt.objects.CueSpecs(
+    brand="Predator",
+    M=cue_mass,
+    length=cue_len,
+    tip_radius=cue_tip_R,
+    butt_radius=0.02,
+    end_mass=cue_tip_mass,
+)
+cue = pt.Cue(cue_ball_id="white", specs=cue_specs)
+
+# Generate the ball layout from the THREECUSHION GameType using the BILLIARD table
+# balls = pt.get_rack(pt.GameType.THREECUSHION, table=table)
+
+# Create balls
+wball = pt.Ball.create(
+    "white",
+    xy=wpos,
+    m=mball,
+    R=Rball,
+    u_s=u_slide,
+    u_r=u_roll,
+    u_sp_proportionality=u_sp_prop,
+    u_b=u_ballball,
+    e_b=e_ballball,
+    e_c=e_cushion,
+    f_c=f_cushion,
+    g=grav,
+)
+
+yball = pt.Ball.create(
+    "yellow",
+    xy=ypos,
+    m=mball,
+    R=Rball,
+    u_s=u_slide,
+    u_r=u_roll,
+    u_sp_proportionality=u_sp_prop,
+    u_b=u_ballball,
+    e_b=e_ballball,
+    e_c=e_cushion,
+    f_c=f_cushion,
+    g=grav,
+)
+
+rball = pt.Ball.create(
+    "red",
+    xy=rpos,
+    m=mball,
+    R=Rball,
+    u_s=u_slide,
+    u_r=u_roll,
+    u_sp_proportionality=u_sp_prop,
+    u_b=u_ballball,
+    e_b=e_ballball,
+    e_c=e_cushion,
+    f_c=f_cushion,
+    g=grav,
+)
+
+
+# Wrap it up as a System
+system_template = pt.System(
+    table=table,
+    balls=(wball, yball, rball),
+    # balls=balls,
+    cue=cue,
+)
+
+# Creates a deep copy of the template
+system = system_template.copy()
+
+phi = pt.aim.at_ball(system, "yellow", cut=cutangle)
+system.cue.set_state(V0=cuespeed, phi=phi, a=sidespin, b=vertspin, theta=cueincline)
+
+# Evolve the shot.
+pt.simulate(system, inplace=True)
+
+
+if is_point(system):
+    print("Point: YES")
+else:
+    print("Point: NO")
+
+
+# Open up the shot in the GUI
+pt.show(system)
