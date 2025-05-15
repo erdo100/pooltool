@@ -7,4 +7,4 @@ dependencies:
   - pip
   - pip:
     # This pin matches CI actions
-    - poetry==1.8.4
+    - poetry==2.1.3

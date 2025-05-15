@@ -64,25 +64,43 @@ class DEOptimizer:
 
 
     def _loss_wrapper(self, scaled_vec):
-        # unscale and evaluate loss
         # start timing
-        start_time = time.perf_counter()
-
+        print("Starting new shot...")
+        start_time = time.time()
+        # unscale and evaluate loss
         x = self.unscale_params(scaled_vec)
+        # print current time
+        elapsed_time = time.time() - start_time
+        print(f"    Elapsed time: {elapsed_time:.8f} seconds")
         params = self._vector_to_params(x)
+        # print elapsed time
+        elapsed_time = time.time() - start_time
+        print(f"    Elapsed time: {elapsed_time:.8f} seconds")
         shot_id = params.value['shot_id']
         shot_actual = self.SA['Shot'][shot_id]
         b1b2b3_col = self.SA['Data']['B1B2B3'][shot_id]
         ball_xy_ini, ball_cols, _ = get_ball_positions(shot_actual, b1b2b3_col)
+        # elapsed time
+        elapsed_time = time.time() - start_time
+        print(f"    Elapsed time: {elapsed_time:.8f} seconds")
         self.sim_env.balls_xy_ini = ball_xy_ini
         self.sim_env.ball_cols = ball_cols
         self.sim_env.prepare_new_shot(params)
+        # elapsed time
+        elapsed_time = time.time() - start_time
+        print(f"    Elapsed time: {elapsed_time:.8f} seconds")
         self.sim_env.simulate_shot()
+        # elapsed time
+        elapsed_time = time.time() - start_time
+        print(f"    Elapsed time: {elapsed_time:.8f} seconds")
         loss = evaluate_loss(self.sim_env, shot_actual)
+        # elapsed time
+        elapsed_time = time.time() - start_time
+        print(f"    Elapsed time: {elapsed_time:.8f} seconds")
         loss_val = sum(np.sum(loss['ball'][i]['total']) for i in range(len(loss['ball'])))
-        # end timing
-        end_time = time.perf_counter()
-        print(f"Time: {end_time - start_time:.6f} Loss: {loss_val:.6f}")
+        print(f"Loss: {loss_val:.5f} | Params: {x}")
+        # print elapsed time
+        print(f"    Elapsed time: {elapsed_time:.8f} seconds")
         return loss_val
 
     def callback(self, xk, convergence):
@@ -155,7 +173,7 @@ class DEOptimizer:
                 tol=0.001,
                 polish=False,
                 workers=1,#self.workers,
-                disp=False,
+                disp=True,
                 init=final_pop,
             )
             
