@@ -2,9 +2,6 @@ from tkinter import Tk
 from parameters import Parameters
 from billiardenv import BilliardEnv
 from GUI import plot_3cushion
-import optuna
-
-optuna.logging.set_verbosity(optuna.logging.INFO)
 
    
 if __name__ == '__main__':

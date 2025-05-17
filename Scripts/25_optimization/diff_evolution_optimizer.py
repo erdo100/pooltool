@@ -29,7 +29,10 @@ class DEOptimizer:
             workers: number of parallel workers; defaults to cpu_count().
         """
         self.SA = SA
-        self.base_params = params
+        # prepare simulation environment
+        self.sim_env = BilliardEnv()
+
+        self.base_params = copy.deepcopy(params)
         # dynamically retrieve bounds from params.limits in value order
         self.bounds = [params.limits[key] for key in params.limits.keys()]
         self.maxiter = maxiter
@@ -39,7 +42,6 @@ class DEOptimizer:
         self.strategy = strategy
         self.polish = polish
         self.workers = workers or mp.cpu_count()
-        self._working_params = copy.deepcopy(self.base_params)
 
         # history tracking
         self.parameter_history = []
@@ -58,49 +60,32 @@ class DEOptimizer:
         return original
 
     def _vector_to_params(self, x_vec):
-        for key, x in zip(self._working_params.limits.keys(), x_vec):
-            self._working_params.value[key] = x
-        return self._working_params
+        for key, x in zip(self.base_params.limits.keys(), x_vec):
+            self.base_params.value[key] = x
+        return self.base_params
 
 
     def _loss_wrapper(self, scaled_vec):
         # start timing
-        print("Starting new shot...")
-        start_time = time.time()
         # unscale and evaluate loss
         x = self.unscale_params(scaled_vec)
-        # print current time
-        elapsed_time = time.time() - start_time
-        print(f"    Elapsed time: {elapsed_time:.8f} seconds")
         params = self._vector_to_params(x)
-        # print elapsed time
-        elapsed_time = time.time() - start_time
-        print(f"    Elapsed time: {elapsed_time:.8f} seconds")
         shot_id = params.value['shot_id']
         shot_actual = self.SA['Shot'][shot_id]
         b1b2b3_col = self.SA['Data']['B1B2B3'][shot_id]
         ball_xy_ini, ball_cols, _ = get_ball_positions(shot_actual, b1b2b3_col)
-        # elapsed time
-        elapsed_time = time.time() - start_time
-        print(f"    Elapsed time: {elapsed_time:.8f} seconds")
         self.sim_env.balls_xy_ini = ball_xy_ini
         self.sim_env.ball_cols = ball_cols
         self.sim_env.prepare_new_shot(params)
-        # elapsed time
-        elapsed_time = time.time() - start_time
-        print(f"    Elapsed time: {elapsed_time:.8f} seconds")
+
+        # start_time = time.time()
         self.sim_env.simulate_shot()
-        # elapsed time
-        elapsed_time = time.time() - start_time
-        print(f"    Elapsed time: {elapsed_time:.8f} seconds")
+        # # elapsed time
+        # elapsed_time = time.time() - start_time
+        # print(f"    Elapsed time: {elapsed_time:.8f} seconds")
         loss = evaluate_loss(self.sim_env, shot_actual)
-        # elapsed time
-        elapsed_time = time.time() - start_time
-        print(f"    Elapsed time: {elapsed_time:.8f} seconds")
         loss_val = sum(np.sum(loss['ball'][i]['total']) for i in range(len(loss['ball'])))
-        print(f"Loss: {loss_val:.5f} | Params: {x}")
-        # print elapsed time
-        print(f"    Elapsed time: {elapsed_time:.8f} seconds")
+
         return loss_val
 
     def callback(self, xk, convergence):
@@ -136,8 +121,6 @@ class DEOptimizer:
             # plt.pause(0.01)
 
     def run_optimization(self):
-        # prepare simulation environment
-        self.sim_env = BilliardEnv()
         # default random population
         init = 'random'
         print("Defaulting to random initial population.")
@@ -172,7 +155,7 @@ class DEOptimizer:
                 callback=self.callback,
                 tol=0.001,
                 polish=False,
-                workers=1,#self.workers,
+                workers=self.workers,
                 disp=True,
                 init=final_pop,
             )
