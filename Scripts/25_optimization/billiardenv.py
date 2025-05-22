@@ -9,7 +9,7 @@ class BilliardEnv:
 
         # Ball Positions
         self.balls_xy_ini = {}
-        self.balls_xy_ini[0] = (0.1, 0, 1)  # White
+        self.balls_xy_ini[0] = (0.2, 1.0)  # White
         self.balls_xy_ini[1] = (0.5, 0.5)  # Yellow
         self.balls_xy_ini[2] = (1.0, 1.0)  # Red
 
@@ -96,7 +96,7 @@ class BilliardEnv:
         )
 
         # modify the cue ball in self.cue
-        self.cue.cue_ball_id = self.ball_cols[0]
+        self.cue.cue_ball_id = "white"#self.ball_cols[0]
 
         # phi = pt.aim.at_ball(self.system, "red", cut=cut)
         # set the cue

@@ -38,20 +38,20 @@ class Parameters:
             'shot_b': (-0.5, 0.5),
             'shot_phi': (-180.0, 180.0),
             'shot_v': (1.0, 7.0),
-            'shot_theta': (0.0, 90.0),
+            'shot_theta': (0.0, 10.0),
 
             # Alciatori Ball-Ball hit model parameters
             # Friction fit curve u_b = a + b * exp(-c * v_rel) used in David Alciatore's TP A-14
-            'physics_ballball_a': (0.0, 0.3),
+            'physics_ballball_a': (0.01, 0.3),
             'physics_ballball_b': (0.0, 1),
             'physics_ballball_c': (0.0, 5.0),
 
             # Physics parameters
-            'physics_u_slide': (0.0, 0.3),
-            'physics_u_roll': (0.0, 0.015),
-            'physics_u_sp_prop': (0.0, 1.0),
-            'physics_e_ballball': (0.0, 1.0),
-            'physics_e_cushion': (0.0, 1.0),
-            'physics_f_cushion': (0.0, 0.5),
+            'physics_u_slide': (0.1, 0.3),
+            'physics_u_roll': (0.0005, 0.015),
+            'physics_u_sp_prop': (0.01, 0.5),
+            'physics_e_ballball': (0.5, 1.0),
+            'physics_e_cushion': (0.5, 1.0),
+            'physics_f_cushion': (0.2, 0.5),
             'physics_h_cushion': (0.033, 0.0341)
         }

@@ -253,17 +253,7 @@ class plot_3cushion():
 
         canvas.draw()  # Update the figure display
 
-    # # Validation functions
-    # def _validate_cpu(self, value):
-    #     """Ensure CPU input stays within valid range"""
-    #     try:
-    #         return 1 <= int(value) <= mp.cpu_count()
-    #     except ValueError:
-    #         return False
 
-    # def _validate_int(self, value):
-    #     """Validate integer input for trial count"""
-    #     return value.isdigit() or value == ""
 
 
     # Shot parameter sliders
@@ -382,16 +372,21 @@ class plot_3cushion():
         params.value['physics_e_cushion'] = sliders['physics_e_cushion'].get()
         params.value['physics_f_cushion'] = sliders['physics_f_cushion'].get()
         params.value['physics_h_cushion'] = sliders['physics_h_cushion'].get()
-
+        
         return params
     
     def start_optimization(self):
         # Get settings from GUI
         print("Starting optimization...")
+
+        b1b2b3 = self.SA['Data']["B1B2B3"][0]
+        shot_actual = self.SA["Shot"][self.params.value['shot_id']]
+        balls_xy_ini, ball_cols, cueball_phi = get_ball_positions(shot_actual, b1b2b3)
+
         method = self.optimizer_var.get()
         totalruns = int(self.trial_entry.get())
         
-        optimizer = DEOptimizer(self.SA, self.params)
+        optimizer = DEOptimizer(shot_actual, self.params, balls_xy_ini, ball_cols, workers=mp.cpu_count(), maxiter=totalruns)
         result, best_params = optimizer.run_optimization()
 
         print("Optimization completed.")
