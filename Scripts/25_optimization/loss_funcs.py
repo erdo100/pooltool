@@ -76,6 +76,7 @@ def evaluate_loss(sim_env, shot_actual, method="combined_distance_angle"):
     
     losses = {}
     losses["ball"] = [{} for _ in range(3)]
+    losses["total"] = 0
 
     # loop over all balls
     for balli in range(3):
@@ -111,9 +112,11 @@ def evaluate_loss(sim_env, shot_actual, method="combined_distance_angle"):
 
         losses["ball"][balli]["time"] = t_interp
         losses["ball"][balli]["angle"] = loss_angle
-        losses["ball"][balli]["distance"] = loss_distance
-        losses["ball"][balli]["total"] = loss_angle + loss_distance*3 + loss_angle*loss_distance
-    
+        losses["ball"][balli]["distance"] = loss_distance/(2+t_interp)
+        losses["ball"][balli]["total"] = loss_angle/(2+t_interp) + loss_distance*3 + loss_angle*loss_distance
+        
+        losses["total"] += np.sum(losses["ball"][balli]["distance"]) 
+
     
     return losses
 

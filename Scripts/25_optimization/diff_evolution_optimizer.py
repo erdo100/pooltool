@@ -5,13 +5,14 @@ import pickle
 import time
 from tkinter import filedialog
 from scipy.optimize import differential_evolution
+from scipy.stats import qmc
 from loss_funcs import evaluate_loss
 from billiardenv import BilliardEnv
 from helper_funcs import get_ball_positions
 import pooltool as pt
 
 class DEOptimizer:
-    def __init__(self, shot_actual, params, balls_xy_ini, ball_cols, maxiter=1000, popsize=(200, 200),
+    def __init__(self, shot_actual, params, balls_xy_ini, ball_cols, maxiter=100, popsize=(2000, 100),
                  mutation=(1.0, 0.5), recombination=(0.9, 0.5), strategy='rand2bin',
                  polish=False, workers=1):
 
@@ -32,6 +33,7 @@ class DEOptimizer:
         self.workers = workers
         self.parameter_history = []
         self.loss_history = []
+        
 
     @staticmethod
     def scale_params(params_np, bounds):
@@ -64,30 +66,88 @@ class DEOptimizer:
         self.sim_env.simulate_shot()
 
         loss = evaluate_loss(self.sim_env, self.shot_actual)
-        loss_val = sum(np.sum(loss['ball'][i]['total']) for i in range(len(loss['ball'])))
 
-        return loss_val
+        return loss["total"]
+
+    def plot_convergence(self, convergence):
+
+        # Format each parameter in best_params to 5 decimal places
+        formatted_params = ", ".join(f"{param:.5f}" for param in self.parameter_history[-1])
+
+        # Print the iteration, formatted parameters, and convergence
+        print(f"Iteration {len(self.parameter_history)} - Best Params: [{formatted_params}], Loss: {self.loss_history[-1]:.5f}, Convergence: {convergence:.5f}")
+
+        # Plot the loss history and parameter history in a single figure
+        plt.figure(1)
+        plt.ion()  # Enable interactive mode for real-time updates
+        plt.clf()
+        
+        # Number of parameters + 1 (for the loss plot)
+        num_params = len(self.parameter_history[-1])
+        param_names = list(self.base_params.limits.keys())
+        rows = int(np.ceil(np.sqrt(num_params + 1)))
+        cols = int(np.ceil((num_params + 1) / rows))
+        
+        # Plot loss history
+        plt.subplot(rows, cols, 1)
+        plt.plot(self.loss_history, 'b-')
+        plt.xlabel('Generation')
+        plt.ylabel('Loss')
+        plt.title('Loss Function History')
+        plt.grid(True)
+
+        for i, (name, (low, high)) in enumerate(zip(self.base_params.limits.keys(), self.base_params.limits.values())):
+            plt.subplot(rows, cols, i + 2)
+            param_values = [p[i] for p in self.parameter_history]
+            plt.plot(param_values, 'r-')
+            plt.title(param_names[i])
+            plt.ylim(low, high)  # Set y-axis limits to parameter bounds
+            plt.grid(True)
+        
+        plt.tight_layout()
+        plt.draw()  # Update the figure
+        plt.pause(0.01)  # Pause to update the plot
+
+
 
     def callback_fn(self, xk, convergence):
         loss = self._loss_wrapper(xk)
         unscaled = self.unscale_params(xk, self.bounds)
         self.parameter_history.append(unscaled.copy())
         self.loss_history.append(loss)
-        fmt = ", ".join(f"{v:.5f}" for v in unscaled)
-        print(f"Gen {len(self.loss_history)} | Best: [{fmt}]  Loss: {loss:.5f}  Conv: {convergence:.5f}")
+        self.plot_convergence(convergence)
 
     def run_optimization(self):
-        init = 'random'
+
         file_path = filedialog.askopenfilename(title="Load initial population", filetypes=[("Pickle", "*.pkl")])
         if file_path:
             with open(file_path, 'rb') as f:
-                init = pickle.load(f)
+                init_population = pickle.load(f)
             print("Initial population loaded from file.")
         else:
-            print("No file selected. Keeping random initial population.")
+            print("Creating new initial population.")
+            # dim = len(self.bounds)
+
+            # # Latin Hypercube Sampling (unit cube)
+            # sampler = qmc.LatinHypercube(d=dim)
+            # sample = sampler.random(n=self.pop_start - 1)  # reserve 1 spot for your candidate
+
+            # # Scale sample to bounds
+            # l_bounds = np.array([b[0] for b in self.bounds])
+            # u_bounds = np.array([b[1] for b in self.bounds])
+            # scaled_sample = qmc.scale(sample, l_bounds, u_bounds)
+
+            # # Your custom candidate
+            # my_candidate = np.array([self.base_params.value[key] for key in self.base_params.limits.keys()])
+            # # Insert your candidate
+            # init_population = np.vstack([my_candidate, scaled_sample])
+
+            init_population = "random"
+
 
         result = None
-        final_pop = init
+        final_pop = init_population
+
         for gen in range(self.maxiter):
             curr_pop = int(self.pop_start + (self.pop_end - self.pop_start) * gen / self.maxiter)
             mut = self.mut_start + (self.mut_end - self.mut_start) * (gen / self.maxiter)
@@ -113,9 +173,9 @@ class DEOptimizer:
             )
             
             final_pop = result.population
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            with open(f"population_{timestamp}.pkl", 'wb') as f:
-                pickle.dump(final_pop, f)
+            # timestamp = time.strftime("%Y%m%d_%H%M%S")
+            # with open(f"population_{timestamp}.pkl", 'wb') as f:
+            #     pickle.dump(final_pop, f)
 
         best_unscaled = self.unscale_params(result.x, self.bounds)
         best_params = copy.deepcopy(self.base_params)

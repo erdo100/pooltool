@@ -2,6 +2,9 @@ import numpy as np
 import sys
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from matplotlib.figure import Figure
+from matplotlib.patches import Circle
+
 import pooltool as pt
 from helper_funcs import run_study, get_ball_positions, open_shotfile, evaluate_loss, save_parameters, load_parameters, save_system, abs_velocity
 import multiprocessing as mp
@@ -168,7 +171,7 @@ class plot_3cushion():
         # plot the initial positions and the current shot routes
         for i in range(3):
             
-            handles["circle_actual"][i] = ax[0].add_patch(plt.Circle((actual_x[i][0], actual_y[i][0]), 0.0615 / 2, color=colortable[i], fill=True))
+            handles["circle_actual"][i] = ax[0].add_patch(Circle((actual_x[i][0], actual_y[i][0]), 0.0615 / 2, color=colortable[i], fill=True))
             handles["shotline_actual"][i] = ax[0].plot(actual_x[i], actual_y[i], color=colortable[i], linestyle='--', linewidth=2)
             handles["shotline_simulated"][i] = ax[0].plot(simulated_x[i], simulated_y[i], color=colortable[i], linestyle='-',linewidth=2)
 
@@ -421,18 +424,17 @@ class plot_3cushion():
         
         SA = self.SA
         sliders = self.sliders
-        params = self.params
         h = self.root.handles
         ax = self.root.ax
         debug_ax = self.root.debug["ax"]
 
         # Retrieve current shot and slider values
-        shot_id = params.value['shot_id'] = sliders['shot_id'].get()
+        shot_id = self.params.value['shot_id'] = sliders['shot_id'].get()
         shot_actual = SA["Shot"][shot_id]
         b1b2b3 = self.SA['Data']["B1B2B3"][shot_id]
         ball_xy_ini, ball_cols, cue_phi = get_ball_positions(shot_actual, b1b2b3)
 
-        params = self.get_slider_values(sliders, params)
+        self.params = self.get_slider_values(sliders, self.params)
 
 
         if self.shot_id_changed:
@@ -445,14 +447,11 @@ class plot_3cushion():
         # set new parameters and simulate shot
         self.sim_env.ball_cols = ball_cols
         self.sim_env.balls_xy_ini = ball_xy_ini
-        self.sim_env.prepare_new_shot(params)
+        self.sim_env.prepare_new_shot(self.params)
         self.sim_env.simulate_shot()
 
         # calculate the reward
         loss = evaluate_loss(self.sim_env, shot_actual)
-        total_loss = 0
-        for balli in range(3):
-            total_loss += np.sum(loss["ball"][balli]["total"]) 
 
         tsim, white_rvw, yellow_rvw, red_rvw = self.sim_env.get_ball_routes()
 
@@ -512,9 +511,9 @@ class plot_3cushion():
 
 
         if is_optimization_update:
-            h["title"].set_text(f"OPTIMIZED Shot {shot_id} - loss = {total_loss:.3f}")
+            h["title"].set_text(f"OPTIMIZED Shot {shot_id} - loss = {loss["total"]:.3f}")
         else:
-            h["title"].set_text(f"Shot {shot_id} - loss = {total_loss:.3f}")
+            h["title"].set_text(f"Shot {shot_id} - loss = {loss["total"]:.3f}")
 
         # plt.draw()
         self.root.canvas.draw()  # Update the figure display
