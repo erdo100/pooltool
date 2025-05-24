@@ -318,7 +318,7 @@ class plot_3cushion():
         physics_u_sp_prop_slider.set(params.value['physics_u_sp_prop'])
         physics_u_sp_prop_slider.pack()
 
-        sliders['physics_e_ballball'] = physics_e_ballball_slider = Scale(slider_frame, from_=0.6, to=1, resolution=0.001, orient=HORIZONTAL, label="Physics e_ballball", length=slider_length, command=update_plot)
+        sliders['physics_e_ballball'] = physics_e_ballball_slider = Scale(slider_frame, from_=0.5, to=1, resolution=0.001, orient=HORIZONTAL, label="Physics e_ballball", length=slider_length, command=update_plot)
         physics_e_ballball_slider.set(params.value['physics_e_ballball'])
         physics_e_ballball_slider.pack()
 
@@ -389,10 +389,9 @@ class plot_3cushion():
         method = self.optimizer_var.get()
         totalruns = int(self.trial_entry.get())
         
-        optimizer = DEOptimizer(shot_actual, self.params, balls_xy_ini, ball_cols, workers=mp.cpu_count(), maxiter=totalruns)
+        optimizer = DEOptimizer(shot_actual, self.params, balls_xy_ini, ball_cols, maxiter=totalruns)
         result, best_params = optimizer.run_optimization()
 
-        print("Optimization completed.")
         # Get best parameters and update sliders
         # for loop over keys in best_params
         print("Best parameters:")
@@ -401,6 +400,7 @@ class plot_3cushion():
                 print(f"Updating slider {key} to {best_params.value[key]}")
                 self.sliders[key].set(best_params.value[key])
 
+        print("Optimization completed.")
 
 
     def update_plot(self, event=None, is_optimization_update=False):
@@ -486,8 +486,8 @@ class plot_3cushion():
             h["varline_simulated"][i][0].set_data(tsim, vs)
 
 
-            h["loss"][i][0].set_data(loss["ball"][i]["time"], np.cumsum(loss["ball"][i]["total"]))
-            loss_max = max(loss_max, np.max(np.cumsum(loss["ball"][i]["total"])))
+            h["loss"][i][0].set_data(loss["ball"][i]["time"], loss["ball"][i]["total"])
+            loss_max = max(loss_max, np.max(loss["ball"][i]["total"]))
             OM = 10**(np.floor(np.log10(tmax))-1)
             tlim = np.ceil(tmax/OM*1.1)*OM
             

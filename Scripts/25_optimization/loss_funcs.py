@@ -20,9 +20,15 @@ def interpolate_ball(act_t, act_x, act_y, sim_t, sim_x, sim_y):
 
 def calculate_distance_loss(t, act_x, act_y, sim_x, sim_y):
     # calculate loss
-    dist = np.sqrt((act_x - sim_x) ** 2 + (act_y - sim_y) ** 2)/2.84
+    dist = np.sqrt((act_x - sim_x) ** 2 + (act_y - sim_y) ** 2)
+    # total length sqrt(deltax**2+dy**2)
+    act_length = np.sqrt(act_x**2 + act_y**2)
+    sim_length = np.sqrt(sim_x**2 + sim_y**2)
 
-    return dist**2
+    # normalize by the length of the actual and simulated path
+    dist = dist / sim_length
+
+    return dist
 
 
 def calculate_angle_loss(t, xsim, ysim, xact, yact):
@@ -103,6 +109,10 @@ def evaluate_loss(sim_env, shot_actual, method="combined_distance_angle"):
         
         t_interp, sim_x_interp, sim_y_interp, act_x_interp, act_y_interp = interpolate_ball(act_t, act_x, act_y, sim_t, sim_x, sim_y)
 
+        dt_interp = np.diff(t_interp)
+        # add last dt to the end of the array to make it the same length as x and y
+        dt_interp = np.insert(dt_interp, len(dt_interp), dt_interp[-1])
+
         # run through events based on actual data and simulation data
         # calculate the angle between act and sim data
         loss_angle = calculate_angle_loss(t_interp, sim_x_interp, sim_y_interp, act_x_interp, act_y_interp)
@@ -112,10 +122,11 @@ def evaluate_loss(sim_env, shot_actual, method="combined_distance_angle"):
 
         losses["ball"][balli]["time"] = t_interp
         losses["ball"][balli]["angle"] = loss_angle
-        losses["ball"][balli]["distance"] = loss_distance/(2+t_interp)
-        losses["ball"][balli]["total"] = loss_angle/(2+t_interp) + loss_distance*3 + loss_angle*loss_distance
-        
-        losses["total"] += np.sum(losses["ball"][balli]["distance"]) 
+        losses["ball"][balli]["distance"] = loss_distance#/dt_interp
+        #losses["ball"][balli]["total"] = loss_angle/(2+t_interp) + loss_distance*3 + loss_angle*loss_distance
+        losses["ball"][balli]["total"] = losses["ball"][balli]["distance"]
+
+        losses["total"] += np.sum(losses["ball"][balli]["total"]) 
 
     
     return losses

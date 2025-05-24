@@ -12,9 +12,9 @@ from helper_funcs import get_ball_positions
 import pooltool as pt
 
 class DEOptimizer:
-    def __init__(self, shot_actual, params, balls_xy_ini, ball_cols, maxiter=100, popsize=(2000, 100),
+    def __init__(self, shot_actual, params, balls_xy_ini, ball_cols, maxiter, popsize=(50, 50),
                  mutation=(1.0, 0.5), recombination=(0.9, 0.5), strategy='rand2bin',
-                 polish=False, workers=1):
+                 polish=False):
 
         self.sim_env = BilliardEnv()
         self.shot_actual = shot_actual
@@ -30,9 +30,10 @@ class DEOptimizer:
         self.rec_start, self.rec_end = recombination
         self.strategy = strategy
         self.polish = polish
-        self.workers = workers
         self.parameter_history = []
         self.loss_history = []
+        self.all_x = []
+        self.all_y = []
         
 
     @staticmethod
@@ -54,6 +55,7 @@ class DEOptimizer:
         for key, x in zip(params.limits.keys(), x_vec):
             params.value[key] = x
         return params
+    
 
     def _loss_wrapper(self, scaled_vec):
         x = self.unscale_params(scaled_vec, self.bounds)
@@ -67,6 +69,9 @@ class DEOptimizer:
 
         loss = evaluate_loss(self.sim_env, self.shot_actual)
 
+        self.all_x.append(x)
+        self.all_y.append(loss["total"])
+
         return loss["total"]
 
     def plot_convergence(self, convergence):
@@ -75,7 +80,7 @@ class DEOptimizer:
         formatted_params = ", ".join(f"{param:.5f}" for param in self.parameter_history[-1])
 
         # Print the iteration, formatted parameters, and convergence
-        print(f"Iteration {len(self.parameter_history)} - Best Params: [{formatted_params}], Loss: {self.loss_history[-1]:.5f}, Convergence: {convergence:.5f}")
+        print(f"Iteration {len(self.parameter_history)} - Loss: {self.loss_history[-1]:.10f} - Best Params: [{formatted_params}], Convergence: {convergence:.5f}")
 
         # Plot the loss history and parameter history in a single figure
         plt.figure(1)
@@ -119,6 +124,8 @@ class DEOptimizer:
 
     def run_optimization(self):
 
+        init_population = None
+
         file_path = filedialog.askopenfilename(title="Load initial population", filetypes=[("Pickle", "*.pkl")])
         if file_path:
             with open(file_path, 'rb') as f:
@@ -126,27 +133,19 @@ class DEOptimizer:
             print("Initial population loaded from file.")
         else:
             print("Creating new initial population.")
-            # dim = len(self.bounds)
+            # Your custom candidate
+            my_candidate = np.array([self.base_params.value[key] for key in self.base_params.limits.keys()])
+            my_candidate_scaled = self.scale_params(my_candidate, self.bounds)
+            # my_candidate_scaled = my_candidate_scaled.reshape((1, len(self.bounds)))
 
-            # # Latin Hypercube Sampling (unit cube)
-            # sampler = qmc.LatinHypercube(d=dim)
-            # sample = sampler.random(n=self.pop_start - 1)  # reserve 1 spot for your candidate
+            # random population
+            sampler = qmc.LatinHypercube(d=len(self.bounds))
+            random_samples = sampler.random(n=self.pop_start*len(self.bounds) - 1)  # reserve 1 spot for your candidate
 
-            # # Scale sample to bounds
-            # l_bounds = np.array([b[0] for b in self.bounds])
-            # u_bounds = np.array([b[1] for b in self.bounds])
-            # scaled_sample = qmc.scale(sample, l_bounds, u_bounds)
-
-            # # Your custom candidate
-            # my_candidate = np.array([self.base_params.value[key] for key in self.base_params.limits.keys()])
-            # # Insert your candidate
-            # init_population = np.vstack([my_candidate, scaled_sample])
-
-            init_population = "random"
-
+            # Insert your candidate
+            init_population = np.vstack([my_candidate_scaled, random_samples])
 
         result = None
-        final_pop = init_population
 
         for gen in range(self.maxiter):
             curr_pop = int(self.pop_start + (self.pop_end - self.pop_start) * gen / self.maxiter)
@@ -167,12 +166,12 @@ class DEOptimizer:
                 callback=self.callback_fn,
                 tol=0.001,
                 polish=False,
-                disp=True,
-                init=final_pop,
-                workers=self.workers
+                disp=False,
+                init=init_population,
+                workers=-1
             )
             
-            final_pop = result.population
+            init_population = result.population
             # timestamp = time.strftime("%Y%m%d_%H%M%S")
             # with open(f"population_{timestamp}.pkl", 'wb') as f:
             #     pickle.dump(final_pop, f)
