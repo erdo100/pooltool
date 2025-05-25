@@ -149,6 +149,49 @@ def abs_velocity(t, x, y):
     v = np.insert(v, 0, 0)
     return v
 
+def get_ball_spins(rvw):
+    """
+    Extract roll, vertical, and side spin components from RVW matrix/matrices.
+    
+    Parameters:
+        rvw: Can be either:
+             - Single RVW matrix with shape (3, 3) where rvw[0] is position, 
+               rvw[1] is velocity, rvw[2] is angular velocity
+             - List/array of RVW matrices for trajectory analysis
+    
+    Returns:
+        If single RVW matrix:
+            tuple: (roll_spin, vertical_spin, side_spin)
+        If list of RVW matrices:
+            dict: Dictionary containing arrays of spin components:
+                  - 'roll_spin': Array of roll/backspin values over time
+                  - 'vertical_spin': Array of topspin/underspin values over time  
+                  - 'side_spin': Array of sidespin values over time
+                  - 'time_indices': Array of time indices corresponding to each measurement
+                  - 'statistics': Dictionary with statistical analysis for each spin component
+    """
+    # Handle trajectory (multiple RVW matrices)
+    n_frames = len(rvw)
+    
+    roll_spins = np.zeros(n_frames)
+    vertical_spins = np.zeros(n_frames)
+    side_spins = np.zeros(n_frames)
+    
+    for i, rvw_frame in enumerate(rvw):
+        if np.linalg.norm(rvw_frame[1]) > 1e-6:  # Only process if ball has velocity
+            phi = pt.ptmath.angle(rvw_frame[1])
+            rot_vec = pt.ptmath.coordinate_rotation(rvw_frame[2].T, -phi).T
+            
+            roll_spins[i] = rot_vec[0]
+            vertical_spins[i] = rot_vec[1]
+            side_spins[i] = rot_vec[2]
+        else:
+            # Ball is stationary, set spins to zero
+            roll_spins[i] = 0
+            vertical_spins[i] = 0
+            side_spins[i] = 0
+    
+    return roll_spins, vertical_spins, side_spins
 
 
 

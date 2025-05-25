@@ -46,10 +46,10 @@ class Parameters:
 
             # Physics parameters
             'physics_u_slide': (0., 0.25),
-            'physics_u_roll': (0.0045, 0.007),
+            'physics_u_roll': (0.004, 0.007),
             'physics_u_sp_prop': (0.1, 0.5),
             'physics_e_ballball': (0.5, 1.0),
             'physics_e_cushion': (0.5, 1.0),
             'physics_f_cushion': (0.1, 0.4),
-            'physics_h_cushion': (0.033, 0.0341)
+            'physics_h_cushion': (0.03, 0.04)
         }

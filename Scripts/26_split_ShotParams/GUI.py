@@ -10,7 +10,7 @@ from tkinter import *
 from tkinter import Menu
 
 import pooltool as pt
-from helper_funcs import run_study, get_ball_positions, open_shotfile, evaluate_loss, save_parameters, load_parameters, save_system, abs_velocity
+from helper_funcs import get_ball_spins, run_study, get_ball_positions, open_shotfile, evaluate_loss, save_parameters, load_parameters, save_system, abs_velocity
 import multiprocessing as mp
 import copy
 from pathlib import Path
@@ -84,7 +84,9 @@ class plot_3cushion():
 
         # Optimization controls frame (directly below sliders)
         optimization_frame = Frame(left_frame)
-        optimization_frame.pack(side=TOP, fill=X, pady=10)        # Trial configuration
+        optimization_frame.pack(side=TOP, fill=X, pady=10)
+        
+        # Trial configuration
         trial_frame = Frame(optimization_frame)
         trial_frame.pack(fill=X, pady=2)
         Label(trial_frame, text="Total Trials:").pack(side=LEFT)
@@ -122,10 +124,10 @@ class plot_3cushion():
         gapx = gap_px / (fig.get_figwidth() * fig.dpi)
         gapy = gap_px / (fig.get_figheight() * fig.dpi)
 
-        first_width = 1 / 3
+        first_width = 1 / 4  # Reduced to make room for more plots
         first_height = 0.95
 
-        ax = [None] * 5
+        ax = [None] * 8  # Now we need 8 axes: 1 table + 3 velocity + 1 loss + 3 spin
         handles = {
             "title": {},
             "circle_actual": {},
@@ -133,9 +135,13 @@ class plot_3cushion():
             "shotline_simulated": {},
             "varline_actual": {},
             "varline_simulated": {},
-            "loss": {}
+            "loss": {},
+            "spin_roll": {},
+            "spin_top": {},
+            "spin_side": {}
         }
 
+        # Create table plot (billiard table view)
         ax[0] = fig.add_axes([left_margin, bottom_margin, first_width, first_height])
         ax[0].set_xticklabels([])
         ax[0].set_yticklabels([])
@@ -149,14 +155,25 @@ class plot_3cushion():
         ax[0].set_yticks(np.arange(0, 2.84 + grid_size, grid_size))
         ax[0].grid(True)
 
+        # Calculate layout for velocity and loss plots (left column)
         available_height = 1 - top_margin - bottom_margin - 3 * gapy
         right_height = available_height / 4
-        right_width = 0.6
-        right_x = left_margin + first_width + gapx
+        right_width_left = 0.35  # Width for left column of plots
+        right_x_left = left_margin + first_width + gapx
 
+        # Create velocity plots (white, yellow, red) and loss plot
         for i in range(4):
             bottom_y = bottom_margin + (3 - i) * (right_height + gapy)
-            ax[i + 1] = fig.add_axes([right_x, bottom_y, right_width, right_height])
+            ax[i + 1] = fig.add_axes([right_x_left, bottom_y, right_width_left, right_height])
+
+        # Calculate layout for spin plots (right column)
+        right_width_right = 0.35  # Width for right column of plots
+        right_x_right = right_x_left + right_width_left + gapx
+
+        # Create spin plots (white, yellow, red) - only 3 plots needed
+        for i in range(3):
+            bottom_y = bottom_margin + (2 - i) * (right_height + gapy) + right_height + gapy  # Align with velocity plots
+            ax[i + 5] = fig.add_axes([right_x_right, bottom_y, right_width_right, right_height])
 
         colortable = ["white", "yellow", "red"]
         for i in range(3):
@@ -166,10 +183,22 @@ class plot_3cushion():
             handles["varline_actual"][i] = ax[i + 1].plot(actual_times, actual_v, label=f"{colortable[i]} actual v in m/s", linestyle='--', linewidth=2)
             handles["varline_simulated"][i] = ax[i + 1].plot(tsim, simulated_v, label=f"{colortable[i]} simulated v in m/s", linestyle='-', linewidth=2)
             handles["loss"][i] = ax[4].plot(actual_times, actual_v, label=f"{colortable[i]} loss in m", linestyle='-', linewidth=2)
+            
+            # Add spin plots for each ball
+            handles["spin_roll"][i] = ax[i + 5].plot(tsim, simulated_v, label=f"{colortable[i].capitalize()} Roll spin", linestyle='-', linewidth=2, color='blue')
+            handles["spin_top"][i] = ax[i + 5].plot(tsim, simulated_v, label=f"{colortable[i].capitalize()} Top spin", linestyle='-', linewidth=2, color='black')
+            handles["spin_side"][i] = ax[i + 5].plot(tsim, simulated_v, label=f"{colortable[i].capitalize()} Side spin", linestyle='-', linewidth=2, color='red')
+            ax[i + 5].set_xlabel("Time (s)")
+            ax[i + 5].set_ylabel("Spin (rad/s)")
 
         for axi in [ax[1], ax[2], ax[3], ax[4]]:
             axi.legend(loc="best")
             axi.grid(True)
+            
+        # Set up spin plot legends and grids
+        for i in range(3):
+            ax[i + 5].legend(loc="best")
+            ax[i + 5].grid(True)
 
         # Initialize sliders and checkboxes dictionaries
         self.sliders = {}
@@ -218,16 +247,19 @@ class plot_3cushion():
     def get_resolution(self, min_val, max_val):
         """Calculate appropriate resolution based on parameter range"""
         range_val = max_val - min_val
+
         if range_val > 100:
-            return 0.01
+            return 0.1
         elif range_val > 10:
-            return 0.01
+            return 0.1
         elif range_val > 1:
             return 0.01
         elif range_val > 0.1:
-            return 0.01
+            return 0.001
+        elif range_val > 0.01:
+            return 0.0001
         else:
-            return 0.01
+            return 0.00001
 
     def add_slider(self, master, key, frm, to, res, label, cmd=None, include_checkbox=True):
         """Add a slider to the frame with optional checkbox and enhanced interactions"""
@@ -332,7 +364,7 @@ class plot_3cushion():
         slider.bind("<Button-3>", on_right_click)  # Right click
         slider.bind("<KeyPress>", on_key_press)
         slider.bind("<Double-Button-1>", on_double_click)
-          # Make slider focusable
+        # Make slider focusable
         slider.config(takefocus=True)
 
     def show_slider_context_menu(self, event, slider):
@@ -442,7 +474,9 @@ class plot_3cushion():
         print("Starting optimization...")
         
         # Disable the optimization button during optimization
-        self.start_button.config(state=DISABLED, text="Optimizing...")        # Get selected parameters for optimization
+        self.start_button.config(state=DISABLED, text="Optimizing...")
+        
+        # Get selected parameters for optimization
         selected_params = []
         for key, checkbox_var in self.checkbox_vars.items():
             if checkbox_var.get():
@@ -549,6 +583,9 @@ class plot_3cushion():
         # update the plot with the new data
         loss_max = 0
         for i, rvw in enumerate([white_rvw, yellow_rvw, red_rvw]):
+    
+            roll_spin, top_spin, side_spin = get_ball_spins(rvw)
+            
             (tmax, vmax) = (0,0)
             # Simulated shot
             xs = rvw[:, 0, 0]
@@ -576,6 +613,11 @@ class plot_3cushion():
             vmax = max(vmax, max(vs))
             h["varline_simulated"][i][0].set_data(tsim, vs)
 
+            # Update spin plots
+            h["spin_roll"][i][0].set_data(tsim, roll_spin)
+            h["spin_top"][i][0].set_data(tsim, top_spin)
+            h["spin_side"][i][0].set_data(tsim, side_spin)
+
             h["loss"][i][0].set_data(loss["ball"][i]["time"], loss["ball"][i]["total"])
             loss_max = max(loss_max, np.max(loss["ball"][i]["total"]))
             OM = 10**(np.floor(np.log10(tmax))-1)
@@ -589,6 +631,18 @@ class plot_3cushion():
 
             self.root.ax[i+1].set_xlim((0, tlim))
             self.root.ax[i+1].set_ylim((0, vlim ))
+            
+            # Set spin plot limits
+            spin_values = np.concatenate([roll_spin, top_spin, side_spin])
+            if len(spin_values) > 0:
+                spin_max = max(abs(np.min(spin_values)), abs(np.max(spin_values)))
+                if spin_max < 0.1:
+                    spin_lim = 0.1
+                else:
+                    OM_spin = 10**(np.floor(np.log10(spin_max))-1)
+                    spin_lim = np.ceil(spin_max/OM_spin*1.1)*OM_spin
+                self.root.ax[i+5].set_xlim((0, tlim))
+                self.root.ax[i+5].set_ylim((-spin_lim, spin_lim))
 
         if loss_max < 0.001:
             loss_lim = 0.001

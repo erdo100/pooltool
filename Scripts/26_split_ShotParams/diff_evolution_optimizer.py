@@ -223,7 +223,6 @@ class DEOptimizer:
         if hasattr(self, 'opt_fig') and plt.fignum_exists(self.opt_fig.number):
             # Update the title to show optimization is complete
             plt.figure(self.opt_fig.number)
-            plt.suptitle('Optimization Completed - Final Results', fontsize=14, fontweight='bold')
             self.opt_fig.canvas.draw_idle()
         
         print("Optimization completed!")
