@@ -23,7 +23,8 @@ class plot_3cushion():
 
         self.root = Tk()
         self.root.title("3-Cushion Shot Optimizer")
-        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)        # Create menu bar
+        self.create_menu_bar()
 
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
@@ -62,21 +63,6 @@ class plot_3cushion():
         right_frame = Frame(main_frame)
         right_frame.pack(side=RIGHT, fill=BOTH, expand=True)
         
-        # Button grid frame on the left
-        button_grid_frame = Frame(left_frame)
-        button_grid_frame.pack(side=TOP, fill=X, pady=10)
-
-        # Configure grid columns to be uniform
-        for i in range(3):
-            button_grid_frame.columnconfigure(i, weight=1, uniform="button")
-        
-        # Create buttons in a 3x2 grid
-        Button(button_grid_frame, text="Load Shots", command=self.start_read_shotfile).grid(row=0, column=0, padx=2, pady=2, sticky="ew")
-        Button(button_grid_frame, text="Show System", command=self.show_system).grid(row=0, column=1, padx=2, pady=2, sticky="ew")
-        Button(button_grid_frame, text="Save Parameters", command=lambda: save_parameters(self.params)).grid(row=0, column=2, padx=2, pady=2, sticky="ew")
-        Button(button_grid_frame, text="Load Parameters", command=lambda: load_parameters(button_grid_frame, self.update_plot, **self.sliders)).grid(row=1, column=0, padx=2, pady=2, sticky="ew")
-        Button(button_grid_frame, text="Save System", command=lambda: save_system(self.update_plot)).grid(row=1, column=1, padx=2, pady=2, sticky="ew")
-        Button(button_grid_frame, text="Run Phi", command=lambda: run_study(self.SA, self.params)).grid(row=1, column=2, padx=2, pady=2, sticky="ew")
         
         # Slider frame
         slider_frame = Frame(left_frame)
@@ -215,6 +201,166 @@ class plot_3cushion():
         self.root.ax = ax
         self.root.handles = handles
         self.root.debug = {"ax": None}  # Add debug reference
+
+    def create_menu_bar(self):
+        """Create the menu bar with figure options"""
+        menubar = Menu(self.root)
+        self.root.config(menu=menubar)
+        
+        # File menu
+        file_menu = Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Load Shots", command=self.start_read_shotfile)
+        file_menu.add_command(label="Save Parameters", command=lambda: save_parameters(self.params))
+        file_menu.add_command(label="Load Parameters", command=lambda: load_parameters(None, self.update_plot, **self.sliders))
+        file_menu.add_command(label="Save System", command=lambda: save_system(self.update_plot))
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.on_closing)
+        
+        # Figure menu
+        figure_menu = Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Figure", menu=figure_menu)
+        figure_menu.add_command(label="Save Figure as PNG", command=self.save_figure_png)
+        figure_menu.add_command(label="Save Figure as PDF", command=self.save_figure_pdf)
+        figure_menu.add_command(label="Save Figure as SVG", command=self.save_figure_svg)
+        figure_menu.add_separator()
+        figure_menu.add_command(label="Reset Zoom", command=self.reset_zoom)
+        figure_menu.add_command(label="Tight Layout", command=self.apply_tight_layout)
+        figure_menu.add_separator()
+        figure_menu.add_command(label="Grid On/Off", command=self.toggle_grid)
+        figure_menu.add_command(label="Refresh Plot", command=self.update_plot)
+        
+        # View menu
+        view_menu = Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="View", menu=view_menu)
+        view_menu.add_command(label="Show System", command=self.show_system)
+        view_menu.add_command(label="Zoom to Fit", command=self.zoom_to_fit)
+        
+        # Tools menu
+        tools_menu = Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Tools", menu=tools_menu)
+        tools_menu.add_command(label="Run Phi Study", command=lambda: run_study(self.SA, self.params))
+        tools_menu.add_command(label="Start Optimization", command=self.start_optimization)
+          # Plot menu
+        plot_menu = Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Plot", menu=plot_menu)
+        
+        # Initialize marker visibility states
+        self.marker_visible = {"white": False, "yellow": False, "red": False}
+        
+        # Add marker toggle options
+        plot_menu.add_command(label="Toggle White Ball Markers", command=lambda: self.toggle_markers("white"))
+        plot_menu.add_command(label="Toggle Yellow Ball Markers", command=lambda: self.toggle_markers("yellow"))
+        plot_menu.add_command(label="Toggle Red Ball Markers", command=lambda: self.toggle_markers("red"))
+        plot_menu.add_separator()
+        plot_menu.add_command(label="Toggle All Markers", command=self.toggle_all_markers)
+
+        # Help menu
+        help_menu = Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="About", command=self.show_about)
+
+    def save_figure_png(self):
+        """Save the current figure as PNG"""
+        from tkinter.filedialog import asksaveasfilename
+        filename = asksaveasfilename(
+            defaultextension=".png",
+            filetypes=[("PNG files", "*.png"), ("All files", "*.*")],
+            title="Save Figure as PNG"
+        )
+        if filename:
+            try:
+                self.root.canvas.figure.savefig(filename, dpi=300, bbox_inches='tight')
+                print(f"Figure saved as {filename}")
+            except Exception as e:
+                print(f"Error saving figure: {e}")
+
+    def save_figure_pdf(self):
+        """Save the current figure as PDF"""
+        from tkinter.filedialog import asksaveasfilename
+        filename = asksaveasfilename(
+            defaultextension=".pdf",
+            filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")],
+            title="Save Figure as PDF"
+        )
+        if filename:
+            try:
+                self.root.canvas.figure.savefig(filename, bbox_inches='tight')
+                print(f"Figure saved as {filename}")
+            except Exception as e:
+                print(f"Error saving figure: {e}")
+
+    def save_figure_svg(self):
+        """Save the current figure as SVG"""
+        from tkinter.filedialog import asksaveasfilename
+        filename = asksaveasfilename(
+            defaultextension=".svg",
+            filetypes=[("SVG files", "*.svg"), ("All files", "*.*")],
+            title="Save Figure as SVG"
+        )
+        if filename:
+            try:
+                self.root.canvas.figure.savefig(filename, bbox_inches='tight')
+                print(f"Figure saved as {filename}")
+            except Exception as e:
+                print(f"Error saving figure: {e}")
+
+    def reset_zoom(self):
+        """Reset zoom on all axes to default view"""
+        try:
+            for ax in self.root.ax:
+                if ax is not None:
+                    ax.relim()
+                    ax.autoscale()
+            self.root.canvas.draw()
+            print("Zoom reset to default view")
+        except Exception as e:
+            print(f"Error resetting zoom: {e}")
+
+    def apply_tight_layout(self):
+        """Apply tight layout to the figure"""
+        try:
+            self.root.canvas.figure.tight_layout()
+            self.root.canvas.draw()
+            print("Tight layout applied")
+        except Exception as e:
+            print(f"Error applying tight layout: {e}")
+
+    def toggle_grid(self):
+        """Toggle grid on/off for all axes"""
+        try:
+            for ax in self.root.ax:
+                if ax is not None:
+                    ax.grid(not ax.grid.get_visible() if hasattr(ax.grid, 'get_visible') else True)
+            self.root.canvas.draw()
+            print("Grid toggled")
+        except Exception as e:
+            print(f"Error toggling grid: {e}")
+
+    def zoom_to_fit(self):
+        """Zoom to fit all data in the plots"""
+        try:
+            for ax in self.root.ax:
+                if ax is not None:
+                    ax.relim()
+                    ax.autoscale_view()
+            self.root.canvas.draw()
+            print("Zoomed to fit data")
+        except Exception as e:
+            print(f"Error zooming to fit: {e}")
+
+    def show_about(self):
+        """Show about dialog"""
+        from tkinter.messagebox import showinfo
+        showinfo("About", 
+                "3-Cushion Shot Optimizer\n\n"
+                "A tool for analyzing and optimizing billiard shots\n"
+                "with physics simulation and parameter optimization.\n\n"
+                "Features:\n"
+                "• Shot visualization and analysis\n"
+                "• Parameter optimization\n"
+                "• Physics simulation\n"
+                "• Multiple export formats")
 
     def create_sliders(self, slider_frame):
         """Create all parameter sliders with checkboxes"""
@@ -534,15 +680,13 @@ class plot_3cushion():
 
     def update_plot(self, event=None, is_optimization_update=False):
         if not hasattr(self, 'SA'):
-            return
-
-        # check if the number of shots has changed
+            return        # check if the number of shots has changed
         newmax = len(self.SA["Shot"])
         currentmax = self.sliders["shot_id"].config()['to'][2]
         if newmax != currentmax:
             # update the length of the slider
             self.sliders["shot_id"].config(to=newmax-1)
-            currentpos=self.sliders["shot_id"].get()
+            currentpos = self.sliders["shot_id"].get()
 
             # check whether current position of the slider is valid, otherwise reset it
             if currentpos >= newmax:
@@ -578,10 +722,9 @@ class plot_3cushion():
         # calculate the reward
         loss = evaluate_loss(self.sim_env, shot_actual)
 
-        tsim, white_rvw, yellow_rvw, red_rvw = self.sim_env.get_ball_routes()
-
-        # update the plot with the new data
+        tsim, white_rvw, yellow_rvw, red_rvw = self.sim_env.get_ball_routes()        # update the plot with the new data
         loss_max = 0
+        colortable = ["white", "yellow", "red"]  # Define color table for ball colors
         for i, rvw in enumerate([white_rvw, yellow_rvw, red_rvw]):
     
             roll_spin, top_spin, side_spin = get_ball_spins(rvw)
@@ -594,13 +737,26 @@ class plot_3cushion():
             # Actual Shot
             ta = np.array(shot_actual['Ball'][i]["t"])
             xa = np.array(shot_actual['Ball'][i]["x"])
-            ya = np.array(shot_actual['Ball'][i]["y"])
-
-            # shot plot axes
+            ya = np.array(shot_actual['Ball'][i]["y"])            # shot plot axes
             h["circle_actual"][i].center = (rvw[0, 0, 0], rvw[0, 0, 1])
             
             h["shotline_actual"][i][0].set_data(xa, ya)            
             h["shotline_simulated"][i][0].set_data(xs ,ys)
+              # Add markers if enabled for this ball color
+            ball_color = colortable[i]
+            if hasattr(self, 'marker_visible') and self.marker_visible.get(ball_color, False):
+                # Add colored markers only to actual trajectories
+                # Remove existing markers first if they exist
+                if f"markers_actual_{i}" in h:
+                    h[f"markers_actual_{i}"].remove()
+                
+                # Add new markers with ball color (only for actual shots)
+                h[f"markers_actual_{i}"] = ax[0].scatter(xa, ya, c='black', s=5, marker='o', zorder=5, edgecolors='none')
+            else:
+                # Remove markers if they exist but are disabled
+                if f"markers_actual_{i}" in h:
+                    h[f"markers_actual_{i}"].remove()
+                    del h[f"markers_actual_{i}"]
 
             # velocity plot axes
             va = abs_velocity(ta, xa, ya)
@@ -663,3 +819,21 @@ class plot_3cushion():
         # Only refresh existing canvas
         self.root.canvas.draw_idle()  # Ensure the canvas is refreshed
         return self.sim_env.system
+
+    def toggle_markers(self, ball_color):
+        """Toggle markers for a specific ball color."""
+        self.marker_visible[ball_color] = not self.marker_visible[ball_color]
+        self.update_plot()
+    
+    def toggle_all_markers(self):
+        """Toggle all ball markers on/off."""
+        # Check if any markers are currently visible
+        any_visible = any(self.marker_visible.values())
+        
+        # If any are visible, turn all off; otherwise turn all on
+        new_state = not any_visible
+        
+        for ball_color in self.marker_visible:
+            self.marker_visible[ball_color] = new_state
+        
+        self.update_plot()
