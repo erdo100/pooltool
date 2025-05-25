@@ -21,12 +21,12 @@ def interpolate_ball(act_t, act_x, act_y, sim_t, sim_x, sim_y):
 def calculate_distance_loss(t, act_x, act_y, sim_x, sim_y):
     # calculate loss
     dist = np.sqrt((act_x - sim_x) ** 2 + (act_y - sim_y) ** 2)
-    # total length sqrt(deltax**2+dy**2)
-    act_length = np.sqrt(act_x**2 + act_y**2)
-    sim_length = np.sqrt(sim_x**2 + sim_y**2)
+    # # total length sqrt(deltax**2+dy**2)
+    # act_length = np.sqrt(act_x**2 + act_y**2)
+    # sim_length = np.sqrt(sim_x**2 + sim_y**2)
 
     # normalize by the length of the actual and simulated path
-    dist = dist / sim_length
+    # dist = dist / sim_length
 
     return dist
 

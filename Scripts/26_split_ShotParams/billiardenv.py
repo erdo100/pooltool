@@ -93,10 +93,8 @@ class BilliardEnv:
             e_c=params.value['physics_e_cushion'],
             f_c=params.value['physics_f_cushion'],
             g=self.grav,
-        )
-
-        # modify the cue ball in self.cue
-        self.cue.cue_ball_id = "white"#self.ball_cols[0]
+        )        # modify the cue ball in self.cue
+        self.cue.cue_ball_id = self.ball_cols[0]
 
         # phi = pt.aim.at_ball(self.system, "red", cut=cut)
         # set the cue

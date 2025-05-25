@@ -1,5 +1,8 @@
-import numpy as np
+import matplotlib
+matplotlib.use('TkAgg')  # Ensure consistent backend
 import matplotlib.pyplot as plt
+plt.ioff()  # Turn off interactive mode by default
+import numpy as np
 import copy
 import pickle
 import time
@@ -9,12 +12,11 @@ from scipy.stats import qmc
 from loss_funcs import evaluate_loss
 from billiardenv import BilliardEnv
 from helper_funcs import get_ball_positions
-import pooltool as pt
 
 class DEOptimizer:
-    def __init__(self, shot_actual, params, balls_xy_ini, ball_cols, maxiter, popsize=(50, 50),
-                 mutation=(1.0, 0.5), recombination=(0.9, 0.5), strategy='rand2bin',
-                 polish=False):
+    def __init__(self, shot_actual, params, balls_xy_ini, ball_cols, maxiter, selected_params=None,
+                 popsize=(50, 50), mutation=(1.0, 0.5), recombination=(0.9, 0.5), 
+                 strategy='rand2bin', polish=False):
 
         self.sim_env = BilliardEnv()
         self.shot_actual = shot_actual
@@ -23,7 +25,15 @@ class DEOptimizer:
         self.sim_env.ball_cols = ball_cols
 
         self.base_params = copy.deepcopy(params)
-        self.bounds = [self.base_params.limits[key] for key in self.base_params.limits.keys()]
+        
+        # If selected_params is provided, only optimize those parameters
+        if selected_params is None:
+            self.selected_params = list(self.base_params.limits.keys())
+        else:
+            self.selected_params = selected_params
+            
+        # Create bounds only for selected parameters
+        self.bounds = [self.base_params.limits[key] for key in self.selected_params]
         self.maxiter = maxiter
         self.pop_start, self.pop_end = (popsize, popsize) if isinstance(popsize, int) else popsize
         self.mut_start, self.mut_end = mutation
@@ -34,7 +44,6 @@ class DEOptimizer:
         self.loss_history = []
         self.all_x = []
         self.all_y = []
-        
 
     @staticmethod
     def scale_params(params_np, bounds):
@@ -49,19 +58,18 @@ class DEOptimizer:
         for i, (low, high) in enumerate(bounds):
             original[i] = scaled_params[i] * (high - low) + low
         return original
-
+    
     @staticmethod
-    def vector_to_params(params, x_vec):
-        for key, x in zip(params.limits.keys(), x_vec):
+    def vector_to_params(params, x_vec, selected_params):
+        for key, x in zip(selected_params, x_vec):
             params.value[key] = x
         return params
-    
-
+        
     def _loss_wrapper(self, scaled_vec):
         x = self.unscale_params(scaled_vec, self.bounds)
 
         current_params = copy.deepcopy(self.base_params)
-        current_params = self.vector_to_params(current_params, x)
+        current_params = self.vector_to_params(current_params, x, self.selected_params)
         
         self.sim_env.prepare_new_shot(current_params)
         
@@ -75,21 +83,48 @@ class DEOptimizer:
         return loss["total"]
 
     def plot_convergence(self, convergence):
-
         # Format each parameter in best_params to 5 decimal places
         formatted_params = ", ".join(f"{param:.5f}" for param in self.parameter_history[-1])
 
         # Print the iteration, formatted parameters, and convergence
         print(f"Iteration {len(self.parameter_history)} - Loss: {self.loss_history[-1]:.10f} - Best Params: [{formatted_params}], Convergence: {convergence:.5f}")
-
-        # Plot the loss history and parameter history in a single figure
-        plt.figure(1)
-        plt.ion()  # Enable interactive mode for real-time updates
+        
+        # Create a separate optimization figure if it doesn't exist
+        if not hasattr(self, 'opt_fig') or not plt.fignum_exists(self.opt_fig.number):
+            # Store current interactive state and figure
+            was_interactive = plt.isinteractive()
+            current_fig = plt.gcf()
+            
+            # Temporarily enable interactive mode for figure creation
+            plt.ion()
+            self.opt_fig = plt.figure(figsize=(12, 8))
+            self.opt_fig.canvas.manager.set_window_title('Optimization Progress')
+            
+            # Position the window to avoid overlap with main GUI
+            mngr = self.opt_fig.canvas.manager
+            if hasattr(mngr, 'window'):
+                if hasattr(mngr.window, 'wm_geometry'):
+                    mngr.window.wm_geometry("+100+100")  # Position window
+                # Prevent window from stealing focus
+                if hasattr(mngr.window, 'attributes'):
+                    mngr.window.attributes('-topmost', False)
+                    mngr.window.focus_set = lambda: None  # Disable focus stealing
+            
+            # Restore previous interactive state and figure
+            if not was_interactive:
+                plt.ioff()
+            plt.figure(current_fig.number)
+        
+        # Update the optimization figure without changing focus
+        current_fig = plt.gcf()
+        
+        # Switch to optimization figure temporarily
+        plt.figure(self.opt_fig.number)
         plt.clf()
         
         # Number of parameters + 1 (for the loss plot)
         num_params = len(self.parameter_history[-1])
-        param_names = list(self.base_params.limits.keys())
+        param_names = self.selected_params
         rows = int(np.ceil(np.sqrt(num_params + 1)))
         cols = int(np.ceil((num_params + 1) / rows))
         
@@ -101,19 +136,24 @@ class DEOptimizer:
         plt.title('Loss Function History')
         plt.grid(True)
 
-        for i, (name, (low, high)) in enumerate(zip(self.base_params.limits.keys(), self.base_params.limits.values())):
+        for i, name in enumerate(self.selected_params):
             plt.subplot(rows, cols, i + 2)
             param_values = [p[i] for p in self.parameter_history]
             plt.plot(param_values, 'r-')
-            plt.title(param_names[i])
+            plt.title(name)
+            low, high = self.bounds[i]
             plt.ylim(low, high)  # Set y-axis limits to parameter bounds
             plt.grid(True)
         
         plt.tight_layout()
-        plt.draw()  # Update the figure
-        plt.pause(0.01)  # Pause to update the plot
-
-
+        
+        # Update the figure without stealing focus
+        self.opt_fig.canvas.draw_idle()
+        self.opt_fig.canvas.flush_events()
+        
+        # Return to the original figure
+        if current_fig != self.opt_fig and plt.fignum_exists(current_fig.number):
+            plt.figure(current_fig.number)
 
     def callback_fn(self, xk, convergence):
         loss = self._loss_wrapper(xk)
@@ -133,8 +173,8 @@ class DEOptimizer:
             print("Initial population loaded from file.")
         else:
             print("Creating new initial population.")
-            # Your custom candidate
-            my_candidate = np.array([self.base_params.value[key] for key in self.base_params.limits.keys()])
+            # Your custom candidate - only for selected parameters
+            my_candidate = np.array([self.base_params.value[key] for key in self.selected_params])
             my_candidate_scaled = self.scale_params(my_candidate, self.bounds)
             # my_candidate_scaled = my_candidate_scaled.reshape((1, len(self.bounds)))
 
@@ -170,15 +210,21 @@ class DEOptimizer:
                 init=init_population,
                 workers=-1
             )
-            
             init_population = result.population
             # timestamp = time.strftime("%Y%m%d_%H%M%S")
             # with open(f"population_{timestamp}.pkl", 'wb') as f:
             #     pickle.dump(final_pop, f)
-
+        
         best_unscaled = self.unscale_params(result.x, self.bounds)
         best_params = copy.deepcopy(self.base_params)
-        best_params = self.vector_to_params(best_params, best_unscaled)
-        plt.ioff()
-        plt.show()
+        best_params = self.vector_to_params(best_params, best_unscaled, self.selected_params)
+        
+        # Update the optimization figure with final results
+        if hasattr(self, 'opt_fig') and plt.fignum_exists(self.opt_fig.number):
+            # Update the title to show optimization is complete
+            plt.figure(self.opt_fig.number)
+            plt.suptitle('Optimization Completed - Final Results', fontsize=14, fontweight='bold')
+            self.opt_fig.canvas.draw_idle()
+        
+        print("Optimization completed!")
         return result, best_params

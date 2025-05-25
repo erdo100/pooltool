@@ -41,8 +41,8 @@ class Parameters:
             'shot_theta': (0.0, 90.0),
 
             'physics_ballball_a': (0.01, 0.05),
-            #'physics_ballball_b': (0.0, 1),
-            #'physics_ballball_c': (0.0, 5.0),
+            'physics_ballball_b': (0.0, 1),
+            'physics_ballball_c': (0.0, 5.0),
 
             # Physics parameters
             'physics_u_slide': (0., 0.25),
@@ -51,5 +51,5 @@ class Parameters:
             'physics_e_ballball': (0.5, 1.0),
             'physics_e_cushion': (0.5, 1.0),
             'physics_f_cushion': (0.1, 0.4),
-            #'physics_h_cushion': (0.033, 0.0341)
+            'physics_h_cushion': (0.033, 0.0341)
         }

@@ -1,10 +1,13 @@
 import numpy as np
 import sys
+import matplotlib
+matplotlib.use('TkAgg')  # Set backend before importing pyplot
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
 from matplotlib.patches import Circle
 from tkinter import *
+from tkinter import Menu
 
 import pooltool as pt
 from helper_funcs import run_study, get_ball_positions, open_shotfile, evaluate_loss, save_parameters, load_parameters, save_system, abs_velocity
@@ -13,7 +16,6 @@ import copy
 from pathlib import Path
 from diff_evolution_optimizer import DEOptimizer
 
-from pathlib import Path
 class plot_3cushion():
     def __init__(self, sim_env, params):
         self.sim_env = sim_env
@@ -29,7 +31,7 @@ class plot_3cushion():
         res_dpi = 100
         fig_width = int(screen_width / res_dpi * 0.75)
         fig_height = int(screen_height / res_dpi * 0.8)
-        fig = plt.figure(figsize=(fig_width, fig_height), dpi=res_dpi)
+        fig = Figure(figsize=(fig_width, fig_height), dpi=res_dpi)
 
         # Data initialization
         total_loss = 0
@@ -58,33 +60,43 @@ class plot_3cushion():
         left_frame.pack(side=LEFT, fill=Y)
 
         right_frame = Frame(main_frame)
-        right_frame.pack(side=RIGHT, fill=BOTH, expand=True)        # Button grid frame on the left
+        right_frame.pack(side=RIGHT, fill=BOTH, expand=True)
+        
+        # Button grid frame on the left
         button_grid_frame = Frame(left_frame)
         button_grid_frame.pack(side=TOP, fill=X, pady=10)
 
         # Configure grid columns to be uniform
         for i in range(3):
-            button_grid_frame.columnconfigure(i, weight=1, uniform="button")        # Create buttons in a 3x2 grid
+            button_grid_frame.columnconfigure(i, weight=1, uniform="button")
+        
+        # Create buttons in a 3x2 grid
         Button(button_grid_frame, text="Load Shots", command=self.start_read_shotfile).grid(row=0, column=0, padx=2, pady=2, sticky="ew")
         Button(button_grid_frame, text="Show System", command=self.show_system).grid(row=0, column=1, padx=2, pady=2, sticky="ew")
         Button(button_grid_frame, text="Save Parameters", command=lambda: save_parameters(self.params)).grid(row=0, column=2, padx=2, pady=2, sticky="ew")
         Button(button_grid_frame, text="Load Parameters", command=lambda: load_parameters(button_grid_frame, self.update_plot, **self.sliders)).grid(row=1, column=0, padx=2, pady=2, sticky="ew")
         Button(button_grid_frame, text="Save System", command=lambda: save_system(self.update_plot)).grid(row=1, column=1, padx=2, pady=2, sticky="ew")
-        Button(button_grid_frame, text="Run Phi", command=lambda: run_study(self.SA, self.params)).grid(row=1, column=2, padx=2, pady=2, sticky="ew")        # Slider frame
+        Button(button_grid_frame, text="Run Phi", command=lambda: run_study(self.SA, self.params)).grid(row=1, column=2, padx=2, pady=2, sticky="ew")
+        
+        # Slider frame
         slider_frame = Frame(left_frame)
         slider_frame.pack(side=TOP, fill=Y)
 
         # Optimization controls frame (directly below sliders)
         optimization_frame = Frame(left_frame)
-        optimization_frame.pack(side=TOP, fill=X, pady=10)
-
-        # Trial configuration
+        optimization_frame.pack(side=TOP, fill=X, pady=10)        # Trial configuration
         trial_frame = Frame(optimization_frame)
         trial_frame.pack(fill=X, pady=2)
         Label(trial_frame, text="Total Trials:").pack(side=LEFT)
         self.trial_entry = Entry(trial_frame, width=8)
         self.trial_entry.insert(0, "100")
         self.trial_entry.pack(side=LEFT, padx=5)
+        
+        # Population size configuration
+        Label(trial_frame, text="Population Size:").pack(side=LEFT, padx=(10, 0))
+        self.popsize_entry = Entry(trial_frame, width=8)
+        self.popsize_entry.insert(0, "50")
+        self.popsize_entry.pack(side=LEFT, padx=5)
 
         # Start optimization button
         self.start_button = Button(trial_frame, text="Start Optimization", command=self.start_optimization, state=NORMAL)
@@ -159,12 +171,16 @@ class plot_3cushion():
             axi.legend(loc="best")
             axi.grid(True)
 
-        # Initialize sliders dictionary
+        # Initialize sliders and checkboxes dictionaries
         self.sliders = {}
+        self.checkboxes = {}
+        self.checkbox_vars = {}
         self.shot_id_changed = False
         
         # Create sliders
-        self.create_sliders(slider_frame)        # Store references
+        self.create_sliders(slider_frame)
+        
+        # Store references
         canvas.draw()
         self.root.canvas = canvas
         self.root.ax = ax
@@ -172,38 +188,215 @@ class plot_3cushion():
         self.root.debug = {"ax": None}  # Add debug reference
 
     def create_sliders(self, slider_frame):
-        """Create all parameter sliders"""
-        # Shot selector slider
-        self.add_slider(slider_frame, 'shot_id', 0, 9, 1, "Shot", self.update_shot_id)
+        """Create all parameter sliders with checkboxes"""
+        # Shot selector slider (no checkbox for this one)
+        self.add_slider(slider_frame, 'shot_id', 0, 9, 1, "Shot", self.update_shot_id, include_checkbox=False)
         
-        # Shot parameter sliders
-        self.add_slider(slider_frame, 'shot_a', -0.6, 0.6, 0.001, "Shot a")
-        self.add_slider(slider_frame, 'shot_b', -0.6, 0.6, 0.001, "Shot b")
-        self.add_slider(slider_frame, 'shot_phi', -180, 180, 0.01, "Shot phi")
-        self.add_slider(slider_frame, 'shot_v', 0, 10, 0.01, "Shot v")
-        self.add_slider(slider_frame, 'shot_theta', 0, 90, 0.1, "Shot theta")
+        # Shot parameter sliders - use limits from parameters.py
+        for key in ['shot_a', 'shot_b', 'shot_phi', 'shot_v', 'shot_theta']:
+            if key in self.params.limits:
+                min_val, max_val = self.params.limits[key]
+                resolution = self.get_resolution(min_val, max_val)
+                self.add_slider(slider_frame, key, min_val, max_val, resolution, key.replace('_', ' ').title())
         
-        # Ball-ball parameter sliders
-        self.add_slider(slider_frame, 'physics_ballball_a', 0, 0.3, 0.001, "Ball-Ball a")
-        self.add_slider(slider_frame, 'physics_ballball_b', 0, 1.0, 0.01, "Ball-Ball b")
-        self.add_slider(slider_frame, 'physics_ballball_c', 0, 5, 0.1, "Ball-Ball c")
-        
-        # Physics parameter sliders
-        self.add_slider(slider_frame, 'physics_u_slide', 0, 0.3, 0.001, "Physics u_slide")
-        self.add_slider(slider_frame, 'physics_u_roll', 0, 0.015, 0.0001, "Physics u_roll")
-        self.add_slider(slider_frame, 'physics_u_sp_prop', 0, 1, 0.01, "Physics u_sp_prop")
-        self.add_slider(slider_frame, 'physics_e_ballball', 0.5, 1, 0.001, "Physics e_ballball")
-        self.add_slider(slider_frame, 'physics_e_cushion', 0.5, 1, 0.001, "Physics e_cushion")
-        self.add_slider(slider_frame, 'physics_f_cushion', 0, 0.5, 0.001, "Physics f_cushion")
-        self.add_slider(slider_frame, 'physics_h_cushion', 0.035, 0.039, 0.0001, "Physics h_cushion")
+        # Ball-ball parameter sliders - use limits from parameters.py
+        for key in ['physics_ballball_a', 'physics_ballball_b', 'physics_ballball_c']:
+            if key in self.params.limits:
+                min_val, max_val = self.params.limits[key]
+                resolution = self.get_resolution(min_val, max_val)
+                self.add_slider(slider_frame, key, min_val, max_val, resolution, key.replace('_', ' ').title())
+                
+        # Physics parameter sliders - use limits from parameters.py
+        physics_keys = ['physics_u_slide', 'physics_u_roll', 'physics_u_sp_prop', 
+                       'physics_e_ballball', 'physics_e_cushion', 'physics_f_cushion', 'physics_h_cushion']
+        for key in physics_keys:
+            if key in self.params.limits:
+                min_val, max_val = self.params.limits[key]
+                resolution = self.get_resolution(min_val, max_val)
+                self.add_slider(slider_frame, key, min_val, max_val, resolution, key.replace('_', ' ').title())
 
-    def add_slider(self, master, key, frm, to, res, label, cmd=None):
-        """Add a slider to the frame"""
-        s = Scale(master, from_=frm, to=to, resolution=res, orient=HORIZONTAL, label=label, length=300, command=cmd or self.update_plot)
+    def get_resolution(self, min_val, max_val):
+        """Calculate appropriate resolution based on parameter range"""
+        range_val = max_val - min_val
+        if range_val > 100:
+            return 0.01
+        elif range_val > 10:
+            return 0.01
+        elif range_val > 1:
+            return 0.01
+        elif range_val > 0.1:
+            return 0.01
+        else:
+            return 0.01
+
+    def add_slider(self, master, key, frm, to, res, label, cmd=None, include_checkbox=True):
+        """Add a slider to the frame with optional checkbox and enhanced interactions"""
+        # Create a frame to hold checkbox and slider
+        slider_container = Frame(master)
+        slider_container.pack(fill=X, padx=5, pady=2)
+        
+        if include_checkbox:
+            # Create checkbox for optimization selection
+            checkbox_var = BooleanVar()
+            checkbox = Checkbutton(slider_container, variable=checkbox_var, width=2)
+            checkbox.pack(side=LEFT)
+            
+            # Store checkbox reference
+            self.checkbox_vars[key] = checkbox_var
+            self.checkboxes[key] = checkbox
+        
+        # Create slider
+        s = Scale(slider_container, from_=frm, to=to, resolution=res, orient=HORIZONTAL, 
+                 label=label, length=280, command=cmd or self.update_plot)
         s.set(self.params.value[key])
-        s.pack()
+        s.pack(side=LEFT, fill=X, expand=True)
+        
+        # Add enhanced slider interactions
+        self.setup_slider_interactions(s, key, frm, to, res)
+        
         self.sliders[key] = s
 
+    def setup_slider_interactions(self, slider, key, min_val, max_val, resolution):
+        """Setup enhanced interactions for sliders"""
+        # Store slider properties for calculations
+        slider.min_val = min_val
+        slider.max_val = max_val
+        slider.resolution = resolution
+        slider.param_key = key
+        
+        # Calculate step sizes
+        normal_step = resolution
+        big_step = resolution * 10
+        range_val = max_val - min_val
+        
+        # Ensure big_step doesn't exceed reasonable bounds
+        if big_step > range_val / 20:
+            big_step = range_val / 20
+        if big_step < normal_step:
+            big_step = normal_step * 2
+            
+        slider.normal_step = normal_step
+        slider.big_step = big_step
+        
+        # Mouse wheel support
+        def on_mousewheel(event):
+            current_val = slider.get()
+            step = slider.big_step if (event.state & 0x1) else slider.normal_step  # Shift key for big steps
+            
+            if event.delta > 0:  # Scroll up
+                new_val = min(current_val + step, slider.max_val)
+            else:  # Scroll down
+                new_val = max(current_val - step, slider.min_val)
+            
+            slider.set(new_val)
+            self.update_plot()
+        
+        # Right-click context menu for big steps
+        def on_right_click(event):
+            # Prevent the event from propagating to avoid slider jump
+            self.show_slider_context_menu(event, slider)
+            return "break"  # This prevents further event handling
+        
+        # Keyboard shortcuts when slider has focus
+        def on_key_press(event):
+            current_val = slider.get()
+            
+            if event.keysym == 'Left':
+                step = slider.big_step if (event.state & 0x1) else slider.normal_step  # Shift for big steps
+                new_val = max(current_val - step, slider.min_val)
+                slider.set(new_val)
+                self.update_plot()
+            elif event.keysym == 'Right':
+                step = slider.big_step if (event.state & 0x1) else slider.normal_step  # Shift for big steps
+                new_val = min(current_val + step, slider.max_val)
+                slider.set(new_val)
+                self.update_plot()
+            elif event.keysym == 'Home':
+                slider.set(slider.min_val)
+                self.update_plot()
+            elif event.keysym == 'End':
+                slider.set(slider.max_val)
+                self.update_plot()
+        
+        # Double-click to reset to default value
+        def on_double_click(event):
+            if key in self.params.value:
+                default_val = self.params.value[key]
+                # Ensure default is within bounds
+                default_val = max(min_val, min(default_val, max_val))
+                slider.set(default_val)
+                self.update_plot()
+        
+        # Bind events
+        slider.bind("<MouseWheel>", on_mousewheel)
+        slider.bind("<Button-3>", on_right_click)  # Right click
+        slider.bind("<KeyPress>", on_key_press)
+        slider.bind("<Double-Button-1>", on_double_click)
+          # Make slider focusable
+        slider.config(takefocus=True)
+
+    def show_slider_context_menu(self, event, slider):
+        """Show context menu for slider with step size options"""
+        import tkinter.messagebox as messagebox
+        
+        menu = Menu(self.root, tearoff=0)
+        
+        # Add menu items for different step operations
+        current_val = slider.get()
+        
+        def set_custom_value():
+            result = self.ask_custom_value(slider)
+            if result is not None:
+                slider.set(result)
+                self.update_plot()
+        
+        def set_custom_step_size():
+            result = self.ask_custom_step_size(slider)
+            if result is not None:
+                slider.normal_step = result
+                slider.big_step = result * 10  # Big step is 10x normal step
+                # Update the slider's resolution to match the new step size
+                slider.config(resolution=result)
+        
+        # Add menu items
+        menu.add_command(label="Enter Custom Value...", command=set_custom_value)
+        menu.add_command(label=f"Set Custom Step Size... (current: {slider.normal_step:.6f})", command=set_custom_step_size)
+        
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+
+    def ask_custom_value(self, slider):
+        """Ask user for custom slider value"""
+        from tkinter.simpledialog import askfloat
+        
+        current_val = slider.get()
+        result = askfloat("Set Custom Value", 
+                         f"Enter value for {slider.param_key} (Range: {slider.min_val} to {slider.max_val}):",
+                         initialvalue=current_val,
+                         minvalue=slider.min_val,
+                         maxvalue=slider.max_val)
+        return result
+
+    def ask_custom_step_size(self, slider):
+        """Ask user for custom step size for slider"""
+        from tkinter.simpledialog import askfloat
+        
+        # Calculate a reasonable default step size based on the range
+        range_size = slider.max_val - slider.min_val
+        default_step = range_size / 100  # 1% of range as default
+        
+        current_step = slider.normal_step
+        result = askfloat("Set Custom Step Size", 
+                         f"Enter step size for {slider.param_key}:\n"
+                         f"Current: {current_step:.6f}\n"
+                         f"Range: {slider.min_val} to {slider.max_val}\n"
+                         f"Suggested: {default_step:.6f}",
+                         initialvalue=current_step,
+                         minvalue=0.000001,  # Very small minimum step
+                         maxvalue=range_size)  # Maximum step is the full range
+        return result
 
     def start_read_shotfile(self):
         self.SA = open_shotfile()
@@ -218,14 +411,12 @@ class plot_3cushion():
         system = self.update_plot()
         pt.show(system)
 
-
     def update_shot_id(self, event=None):
         self.shot_id_changed = True
         self.update_plot()
 
     def get_slider_values(self, sliders, params):
         # update the actual parameters
-
         params.value['shot_id'] = sliders['shot_id'].get()
         params.value['shot_a'] = sliders['shot_a'].get()
         params.value['shot_b'] = sliders['shot_b'].get()
@@ -245,9 +436,25 @@ class plot_3cushion():
         params.value['physics_h_cushion'] = sliders['physics_h_cushion'].get()
         
         return params
+        
     def start_optimization(self):
         # Get settings from GUI
         print("Starting optimization...")
+        
+        # Disable the optimization button during optimization
+        self.start_button.config(state=DISABLED, text="Optimizing...")        # Get selected parameters for optimization
+        selected_params = []
+        for key, checkbox_var in self.checkbox_vars.items():
+            if checkbox_var.get():
+                selected_params.append(key)
+        
+        if not selected_params:
+            print("No parameters selected for optimization!")
+            # Re-enable the optimization button since we're returning early
+            self.start_button.config(state=NORMAL, text="Start Optimization")
+            return
+
+        print(f"Optimizing parameters: {selected_params}")
 
         b1b2b3 = self.SA['Data']["B1B2B3"][0]
         shot_actual = self.SA["Shot"][self.params.value['shot_id']]
@@ -255,24 +462,45 @@ class plot_3cushion():
 
         totalruns = int(self.trial_entry.get())
         
-        optimizer = DEOptimizer(shot_actual, self.params, balls_xy_ini, ball_cols, maxiter=totalruns)
-        result, best_params = optimizer.run_optimization()
+        # Get and validate population size
+        try:
+            popsize = int(self.popsize_entry.get())
+            if popsize <= 0:
+                print("Population size must be a positive integer. Using default value of 50.")
+                popsize = 50
+        except ValueError:
+            print("Invalid population size entered. Using default value of 50.")
+            popsize = 50
+        
+        print(f"Using population size: {popsize}")
+        
+        optimizer = DEOptimizer(shot_actual, self.params, balls_xy_ini, ball_cols, 
+                               maxiter=totalruns, selected_params=selected_params, popsize=popsize)
+        try:
+            result, best_params = optimizer.run_optimization()
+            # Get best parameters and update sliders
+            print("Best parameters:")
+            for key in selected_params:
+                if key in self.sliders:
+                    print(f"Updating slider {key} to {best_params.value[key]}")
+                    self.sliders[key].set(best_params.value[key])
 
-        # Get best parameters and update sliders
-        print("Best parameters:")
-        for key, value in best_params.limits.items():
-            if key in self.sliders:
-                print(f"Updating slider {key} to {best_params.value[key]}")
-                self.sliders[key].set(best_params.value[key])
+            # Update the main GUI plot after optimization
+            self.update_plot(is_optimization_update=True)
+            
+            print("Optimization completed.")
+        except Exception as e:
+            print(f"Optimization failed with error: {e}")
+            # Re-enable the optimization button in case of error
+            self.start_button.config(state=NORMAL, text="Start Optimization")
+            return
 
-        print("Optimization completed.")
-
+        # Re-enable the optimization button at the end
+        self.start_button.config(state=NORMAL, text="Start Optimization")
 
     def update_plot(self, event=None, is_optimization_update=False):
-        
         if not hasattr(self, 'SA'):
             return
-        
 
         # check if the number of shots has changed
         newmax = len(self.SA["Shot"])
@@ -286,7 +514,6 @@ class plot_3cushion():
             if currentpos >= newmax:
                 self.sliders["shot_id"].set(newmax-1)
 
-        
         SA = self.SA
         sliders = self.sliders
         h = self.root.handles
@@ -300,7 +527,6 @@ class plot_3cushion():
         ball_xy_ini, ball_cols, cue_phi = get_ball_positions(shot_actual, b1b2b3)
 
         self.params = self.get_slider_values(sliders, self.params)
-
 
         if self.shot_id_changed:
             # params.value['shot_phi'] = cue_phi
@@ -350,7 +576,6 @@ class plot_3cushion():
             vmax = max(vmax, max(vs))
             h["varline_simulated"][i][0].set_data(tsim, vs)
 
-
             h["loss"][i][0].set_data(loss["ball"][i]["time"], loss["ball"][i]["total"])
             loss_max = max(loss_max, np.max(loss["ball"][i]["total"]))
             OM = 10**(np.floor(np.log10(tmax))-1)
@@ -374,17 +599,13 @@ class plot_3cushion():
         self.root.ax[4].set_xlim((0, tlim ))
         self.root.ax[4].set_ylim((0, loss_lim ))
 
-
         if is_optimization_update:
-            h["title"].set_text(f"OPTIMIZED Shot {shot_id} - loss = {loss["total"]:.3f}")
+            h["title"].set_text(f"OPTIMIZED Shot {shot_id} - loss = {loss['total']:.3f}")
         else:
-            h["title"].set_text(f"Shot {shot_id} - loss = {loss["total"]:.3f}")
+            h["title"].set_text(f"Shot {shot_id} - loss = {loss['total']:.3f}")
 
         # plt.draw()
         self.root.canvas.draw()  # Update the figure display
         # Only refresh existing canvas
         self.root.canvas.draw_idle()  # Ensure the canvas is refreshed
         return self.sim_env.system
-
-
-
