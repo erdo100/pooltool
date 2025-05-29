@@ -96,7 +96,7 @@ def loss_fun_eventbased(balli, losses, sim_t, sim_x, sim_y, act_t, act_x, act_y,
     loss_hit = 0
     loss_distance = 0
     current_time = 0
-
+    loss_hit_std = 1
     losses["ball"][balli]["time"].append(0)
     losses["ball"][balli]["total"].append(0)
 
@@ -110,16 +110,20 @@ def loss_fun_eventbased(balli, losses, sim_t, sim_x, sim_y, act_t, act_x, act_y,
         t_sim1 = 0
 
         if correct_hit == True:
+            # len() ==  1 does mean ==> no contact, 1 element is 'S', or '-'
 
             if len(act_hit["with"]) == 1 and len(sim_hit["with"]) > 1:
+                # ball has no contact, the in sim or actual data
                 correct_hit = False
-                loss_hit = 10.0
+                loss_hit = loss_hit_std
 
             if len(act_hit["with"]) > 1 and len(sim_hit["with"]) == 1:
+                # ball has no contact, the in sim or actual data
                 correct_hit = False
-                loss_hit = 10.0
+                loss_hit = loss_hit_std
 
             if len(act_hit["with"]) == 1 and len(sim_hit["with"]) == 1:
+                # both sim and act have no contact
                 loss_hit = 0.0
 
             # case when more than 1 events left in both
@@ -132,20 +136,20 @@ def loss_fun_eventbased(balli, losses, sim_t, sim_x, sim_y, act_t, act_x, act_y,
                     # Check if the upcoming event is same?
                         if act_hit["with"][ei+1] != sim_hit["with"][ei+1]:
                             correct_hit = False
-                            loss_hit = 10.0
+                            loss_hit = loss_distance
             else:
                 correct_hit = False
-                loss_hit = 10.0
+                loss_hit = loss_hit_std
             
         else:
             # wrong hit happened, soo following events must be wrong
-            loss_hit = 10.0
+            loss_hit = loss_hit_std
             loss_distance = 0
         
             current_time = np.max([t_act1, t_sim1])
 
         # assign the loss
-        losses["ball"][balli]["time"].append(current_time)
+        losses["ball"][balli]["time"].append(ei)
         losses["ball"][balli]["total"].append(loss_hit + loss_distance)
 
     return losses
