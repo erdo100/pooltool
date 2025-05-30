@@ -31,70 +31,37 @@ def calculate_distance_loss(t, act_x, act_y, sim_x, sim_y):
     return dist
 
 
-def generate_single_events(data):
-    """
-    Extract ball-ball collision events from simulation or actual shot data.
-    Avoids duplicate collisions by tracking already recorded ball-ball pairs and times.
-    
-    Args:
-        data: Dictionary containing hit data for each ball with 'hit' key containing
-              ball collision information (with, time arrays for each ball)
-    
-    Returns:
-        dict: Events dictionary with keys:
-            - 'bb': List of unique ball-ball collision pairs (e.g., 'WY', 'WR', 'YR')
-            - 't': List of collision times
-    """
-    # Initialize events dictionary to store all ball-ball collisions
-    events = {"bb": [], "t": []}
-    
-    # Ball color mapping: White=0, Yellow=1, Red=2, Wall=W
-    ball_colors = ['W', 'Y', 'R']
-    
-    # Ball order for consistent naming: W < Y < R
-    ball_order = {'W': 0, 'Y': 1, 'R': 2}
-    
-    # Track already recorded collisions to avoid duplicates
-    # Each collision will be stored as (ball_pair, time) to identify unique events
-    recorded_collisions = set()
-    
-    # Process each ball's collision data
-    for ball_index in range(3):
-        current_ball_color = ball_colors[ball_index]
-        
-        # Find ball-ball collisions (exclude wall collisions and start/end markers)
-        for i, partner in enumerate(data[ball_index]["with"]):
-            if partner in ball_colors:  # Only process ball-ball collisions
-                # Create consistent ball pair identifier (alphabetical order)
-                ball_pair = ''.join(sorted([current_ball_color, partner], 
-                                         key=lambda x: ball_order[x]))
-                
-                collision_time = data[ball_index]["t"][i]
-                collision_key = (ball_pair, collision_time)
-                
-                # Only add if this collision hasn't been recorded yet
-                if collision_key not in recorded_collisions:
-                    events["bb"].append(ball_pair)           # Ball pair (WY, WR, YR)
-                    events["t"].append(collision_time)       # Time of collision
-                    recorded_collisions.add(collision_key)
-    
-    return events
-
 def evaluate_loss(sim_env, shot_actual, method="distance"):
 
     sim_t, white_rvw, yellow_rvw, red_rvw = sim_env.get_ball_routes()
     balls_rvw = [white_rvw, yellow_rvw, red_rvw]
     sim_hit_all = sim_env.get_events(sim_env)
 
-    # generate_single_events
-    act_events = generate_single_events(shot_actual["hit"])
-    sim_events = generate_single_events(sim_hit_all)
+    if method == "eventbased":
+        # Step 1: Convert hit data to chronologically ordered tables
+        actual_events_table = convert_hits_to_chronological_table(shot_actual["hit"])
+        sim_events_table = convert_hits_to_chronological_table(sim_hit_all)
+        
+        # Step 2: Compare the chronological event sequences
+        comparison_result = compare_chronological_events(actual_events_table, sim_events_table)
+        
+        # Create loss structure based on comparison
+        losses = {}
+        losses["comparison"] = comparison_result
+        losses["total"] = 1.0 - comparison_result['match_score']  # Loss is 1 - match_score
+        
+        # Optional: Add detailed event-by-event loss information
+        losses["event_details"] = {
+            "actual_events": actual_events_table['events'],
+            "sim_events": sim_events_table['events'],
+            "actual_times": actual_events_table['times'],
+            "sim_times": sim_events_table['times'],
+            "event_matches": comparison_result['event_matches']
+        }
+        
+        return losses
 
-
-
-
-
-
+    # Original distance-based method for backwards compatibility
     losses = {}
     losses["ball"] = [{} for _ in range(3)]
     losses["total"] = 0
@@ -124,14 +91,10 @@ def evaluate_loss(sim_env, shot_actual, method="distance"):
         if method == "distance":
             losses =  loss_func_distance(balli, losses, t_interp, sim_x_interp, sim_y_interp, act_x_interp, act_y_interp)
         
-        elif method == "eventbased":
-            
-            losses =  loss_fun_eventbased(balli, losses, sim_t, sim_x, sim_y, 
-                                       act_t, act_x, act_y, sim_hit_all[balli], shot_actual["hit"][balli],
-                                       act_events, sim_events)
-        
         # calculate total loss for the ball
         losses["total"] += np.sum(losses["ball"][balli]["total"]) 
+
+    return losses
         # print("ball", balli, ", loss=", losses["ball"][balli]["total"])
 
     return losses
@@ -209,10 +172,9 @@ def loss_fun_eventbased(balli, losses, sim_t, sim_x, sim_y, act_t, act_x, act_y,
                             # Check if this collision exists in both act_events and sim_events
                             collision_found_in_both = False
                             time_tolerance = 0.1  # Allow small time differences due to numerical precision
-                            
-                            # Find matching collision in actual events
-                            act_indices = [i for i, bb in enumerate(act_events["bb"]) if bb == ball_pair]
-                            sim_indices = [i for i, bb in enumerate(sim_events["bb"]) if bb == ball_pair]
+                              # Find matching collision in actual events
+                            act_indices = [i for i, hit in enumerate(act_events["hits"]) if hit == ball_pair]
+                            sim_indices = [i for i, hit in enumerate(sim_events["hits"]) if hit == ball_pair]
                             
                             # Check if there's a time match within tolerance
                             for act_idx in act_indices:
@@ -311,5 +273,146 @@ def interpolate_coordinate(simulated, tsim, actual_times):
     )
     interpolated = interp_func(actual_times)
     return interpolated
+
+def convert_hits_to_chronological_table(hit_data):
+    """
+    Convert hit data from all balls into a single chronologically ordered table.
+    
+    Args:
+        hit_data: List of hit data for each ball [ball0, ball1, ball2]
+                 Each ball has {"with": [...], "t": [...]} format
+                 where "with" contains strings like '-R123Y4'
+    
+    Returns:
+        dict: Chronologically ordered events with keys:
+            - 'events': List of event identifiers (WY, WR, YR, W1, W2, etc.)
+            - 'times': List of corresponding times
+            - 'ball': List of ball indices that experienced the collision
+    """
+    all_events = []
+    
+    # Ball color mapping
+    ball_colors = ['W', 'Y', 'R']
+    cushion_numbers = ['1', '2', '3', '4']
+    ball_order = {'W': 0, 'Y': 1, 'R': 2}
+    
+    # Process each ball's collision data
+    for ball_index in range(3):
+        current_ball_color = ball_colors[ball_index]
+        
+        # Process collision string for each event
+        for i, char in enumerate(hit_data[ball_index]["with"]):
+                
+            collision_time = hit_data[ball_index]["t"][i]
+            
+            collision_identifier = None
+            
+            if char in ball_colors:  # Ball-ball collision
+                # Create consistent ball pair identifier (alphabetical order)
+                ball_pair = ''.join(sorted([current_ball_color, char], 
+                                            key=lambda x: ball_order[x]))
+                collision_identifier = ball_pair
+                
+            elif char in cushion_numbers:  # Ball-cushion collision
+                # Create ball-cushion identifier
+                collision_identifier = current_ball_color + char
+            
+            # Add collision if it's valid
+            if collision_identifier:
+                all_events.append({
+                    'event': collision_identifier,
+                    'time': collision_time,
+                    'ball': ball_index
+                })
+
+    # Remove duplicates for ball-ball collisions (same event from different balls)
+    unique_events = []
+    seen_ball_collisions = set()
+    
+    for event_data in all_events:
+        event_id = event_data['event']
+        event_time = event_data['time']
+        
+        # For ball-ball collisions, avoid duplicates
+        if len(event_id) == 2 and event_id[0] in ball_colors and event_id[1] in ball_colors:
+            # Ball-ball collision
+            collision_key = (event_id, round(event_time, 6))  # Round to avoid floating point issues
+            if collision_key not in seen_ball_collisions:
+                unique_events.append(event_data)
+                seen_ball_collisions.add(collision_key)
+        else:
+            # Ball-cushion collision (no deduplication needed)
+            unique_events.append(event_data)
+    
+    # Sort chronologically by time
+    unique_events.sort(key=lambda x: x['time'])
+    
+    # Convert to the required format
+    result = {
+        'events': [event['event'] for event in unique_events],
+        'times': [event['time'] for event in unique_events],
+        'ball': [event['ball'] for event in unique_events]
+    }
+    
+    return result
+
+
+def compare_chronological_events(actual_events, sim_events):
+    """
+    Compare two chronologically ordered event sequences for matching contact partners.
+    
+    Args:
+        actual_events: Event table from convert_hits_to_chronological_table (actual data)
+        sim_events: Event table from convert_hits_to_chronological_table (simulation data)
+    
+    Returns:
+        dict: Comparison results with keys:
+            - 'match_score': Float between 0-1 indicating how well events match
+            - 'matched_events': Number of events that matched in order
+            - 'total_events': Maximum number of events to compare
+            - 'event_matches': List of booleans indicating which events matched
+            - 'actual_sequence': Actual event sequence
+            - 'sim_sequence': Simulation event sequence
+    """
+    actual_sequence = actual_events['events']
+    sim_sequence = sim_events['events']
+    
+    # Compare sequences up to the length of the shorter one
+    max_length = max(len(actual_sequence), len(sim_sequence))
+    min_length = min(len(actual_sequence), len(sim_sequence))
+    
+    event_matches = []
+    matched_events = 0
+    
+    # Compare event by event in chronological order
+    for i in range(max_length):
+        if i < len(actual_sequence) and i < len(sim_sequence):
+            # Both sequences have an event at this position
+            actual_event = actual_sequence[i]
+            sim_event = sim_sequence[i]
+            
+            if actual_event == sim_event:
+                event_matches.append(True)
+                matched_events += 1
+            else:
+                event_matches.append(False)
+        else:
+            # One sequence is longer than the other
+            event_matches.append(False)
+    
+    # Calculate match score
+    if max_length > 0:
+        match_score = matched_events / max_length
+    else:
+        match_score = 1.0  # Perfect match if both sequences are empty
+    
+    return {
+        'match_score': match_score,
+        'matched_events': matched_events,
+        'total_events': max_length,
+        'event_matches': event_matches,
+        'actual_sequence': actual_sequence,
+        'sim_sequence': sim_sequence
+    }
 
 
