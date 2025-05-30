@@ -35,39 +35,18 @@ def evaluate_loss(sim_env, shot_actual, method="distance"):
 
     sim_t, white_rvw, yellow_rvw, red_rvw = sim_env.get_ball_routes()
     balls_rvw = [white_rvw, yellow_rvw, red_rvw]
-    sim_hit_all = sim_env.get_events(sim_env)
+    sim_hit = sim_env.get_events(sim_env)
+    act_hit = shot_actual["hit"]
 
     if method == "eventbased":
         # Step 1: Convert hit data to chronologically ordered tables
-        actual_events_table = convert_hits_to_chronological_table(shot_actual["hit"])
-        sim_events_table = convert_hits_to_chronological_table(sim_hit_all)
-        
+        act_events = convert_hits_to_chronological_table(act_hit)
+        sim_events = convert_hits_to_chronological_table(sim_hit)
+
         # Step 2: Compare the chronological event sequences
-        comparison_result = compare_chronological_events(actual_events_table, sim_events_table)
-        
-        # Calculate loss
+        comparison_result = compare_chronological_events(act_events, sim_events)
 
-        # Create loss structure based on comparison
-        losses = {}
-        losses["comparison"] = comparison_result
-        losses["total"] = 1.0 - comparison_result['match_score']  # Loss is 1 - match_score
-        
-        # Optional: Add detailed event-by-event loss information
-        losses["event_details"] = {
-            "actual_events": actual_events_table['events'],
-            "sim_events": sim_events_table['events'],
-            "actual_times": actual_events_table['times'],
-            "sim_times": sim_events_table['times'],
-            "event_matches": comparison_result['event_matches']
-        }
-        
-        return losses
 
-    # Original distance-based method for backwards compatibility
-    losses = {}
-    losses["ball"] = [{} for _ in range(3)]
-    losses["total"] = 0
-    
     # loop over all balls
     for balli in range(3):
         losses["ball"][balli]["time"] = []
@@ -93,6 +72,9 @@ def evaluate_loss(sim_env, shot_actual, method="distance"):
         if method == "distance":
             losses =  loss_func_distance(balli, losses, t_interp, sim_x_interp, sim_y_interp, act_x_interp, act_y_interp)
         
+        elif method == "eventbased":
+            loss_fun_eventbased(balli, losses, sim_t, sim_x, sim_y, act_t, act_x, act_y, sim_hit, act_hit, act_events, sim_events)
+
         # calculate total loss for the ball
         losses["total"] += np.sum(losses["ball"][balli]["total"]) 
 
@@ -126,86 +108,11 @@ def loss_fun_eventbased(balli, losses, sim_t, sim_x, sim_y, act_t, act_x, act_y,
     # run through events based on actual data and simulation data
     # Starts with Start and look to the next event
     # total_events = range(max(len(act_hit["with"]), len(sim_hit["with"]))-1)
-    total_events = range(len(act_hit["with"])-1)
+    total_events = range(len(act_events)-1)
     for ei in total_events:
 
-        t_act1 = 0
-        t_sim1 = 0
-
-        if correct_hit == True:
-            # len() ==  1 does mean ==> no contact, 1 element is 'S', or '-'
-
-            if len(act_hit["with"]) == 1 and len(sim_hit["with"]) > 1:
-                # ball has no contact, the in sim or actual data
-                correct_hit = False
-                loss_hit = loss_hit_std
-
-            if len(act_hit["with"]) > 1 and len(sim_hit["with"]) == 1:
-                # ball has no contact, the in sim or actual data
-                correct_hit = False
-                loss_hit = loss_hit_std
-
-            if len(act_hit["with"]) == 1 and len(sim_hit["with"]) == 1:
-                # both sim and act have no contact
-                loss_hit = 0.0
-
-            # case when more than 1 events left in both
-            if ei < len(act_hit["with"])-1 and ei < len(sim_hit["with"])-1:                # calculate the distance loss
-                loss_distance, current_time = distance_loss_event(ei, sim_t, sim_x, sim_y, sim_hit, act_t, act_x, act_y, act_hit)
-
-                if ei < len(act_hit["with"])-2 and ei < len(sim_hit["with"])-2:
-                    # Check if the upcoming event is same and exists in both act_events and sim_events
-                    upcoming_act_partner = act_hit["with"][ei+1]
-                    upcoming_sim_partner = sim_hit["with"][ei+1]
-                    upcoming_act_time = act_hit["t"][ei+1]
-                    upcoming_sim_time = sim_hit["t"][ei+1]
-                    
-                    if upcoming_act_partner != upcoming_sim_partner:
-                        correct_hit = False
-                        loss_hit = loss_hit_std
-                    else:
-                        # Additional check: verify this collision exists in both event lists with matching time
-                        if upcoming_act_partner in col:  # Only check ball-ball collisions
-                            # Create ball pair identifier for verification
-                            ball_order = {'W': 0, 'Y': 1, 'R': 2}
-                            ball_pair = ''.join(sorted([current_ball_color, upcoming_act_partner], 
-                                               key=lambda x: ball_order[x]))
-                            
-                            # Check if this collision exists in both act_events and sim_events
-                            collision_found_in_both = False
-                            time_tolerance = 0.1  # Allow small time differences due to numerical precision
-                              # Find matching collision in actual events
-                            act_indices = [i for i, hit in enumerate(act_events["hits"]) if hit == ball_pair]
-                            sim_indices = [i for i, hit in enumerate(sim_events["hits"]) if hit == ball_pair]
-                            
-                            # Check if there's a time match within tolerance
-                            for act_idx in act_indices:
-                                act_event_time = act_events["t"][act_idx]
-                                if abs(act_event_time - upcoming_act_time) < time_tolerance:
-                                    # Found matching actual event, now check simulation
-                                    for sim_idx in sim_indices:
-                                        sim_event_time = sim_events["t"][sim_idx]
-                                        if (abs(sim_event_time - upcoming_sim_time) < time_tolerance and
-                                            abs(act_event_time - sim_event_time) < time_tolerance):
-                                            collision_found_in_both = True
-                                            break
-                                    if collision_found_in_both:
-                                        break
-                            
-                            if not collision_found_in_both:
-                                correct_hit = False
-                                loss_hit = loss_distance
-            else:
-                correct_hit = False
-                loss_hit = loss_hit_std
-            
-        else:
-            # wrong hit happened, soo following events must be wrong
-            loss_hit = loss_hit_std
-            loss_distance = 0
-        
-            current_time = np.max([t_act1, t_sim1])
-
+        # how the code should work?
+        # check in 
         # assign the loss
         losses["ball"][balli]["time"].append(ei)
         losses["ball"][balli]["total"].append(loss_hit + loss_distance)
