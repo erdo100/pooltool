@@ -45,6 +45,8 @@ def evaluate_loss(sim_env, shot_actual, method="distance"):
         # Step 2: Compare the chronological event sequences
         comparison_result = compare_chronological_events(actual_events_table, sim_events_table)
         
+        # Calculate loss
+
         # Create loss structure based on comparison
         losses = {}
         losses["comparison"] = comparison_result
@@ -358,22 +360,7 @@ def convert_hits_to_chronological_table(hit_data):
 
 
 def compare_chronological_events(actual_events, sim_events):
-    """
-    Compare two chronologically ordered event sequences for matching contact partners.
-    
-    Args:
-        actual_events: Event table from convert_hits_to_chronological_table (actual data)
-        sim_events: Event table from convert_hits_to_chronological_table (simulation data)
-    
-    Returns:
-        dict: Comparison results with keys:
-            - 'match_score': Float between 0-1 indicating how well events match
-            - 'matched_events': Number of events that matched in order
-            - 'total_events': Maximum number of events to compare
-            - 'event_matches': List of booleans indicating which events matched
-            - 'actual_sequence': Actual event sequence
-            - 'sim_sequence': Simulation event sequence
-    """
+
     actual_sequence = actual_events['events']
     sim_sequence = sim_events['events']
     
@@ -382,7 +369,7 @@ def compare_chronological_events(actual_events, sim_events):
     min_length = min(len(actual_sequence), len(sim_sequence))
     
     event_matches = []
-    matched_events = 0
+    all_OK = True
     
     # Compare event by event in chronological order
     for i in range(max_length):
@@ -391,28 +378,13 @@ def compare_chronological_events(actual_events, sim_events):
             actual_event = actual_sequence[i]
             sim_event = sim_sequence[i]
             
-            if actual_event == sim_event:
+            if actual_event == sim_event and all_OK:
                 event_matches.append(True)
-                matched_events += 1
             else:
                 event_matches.append(False)
+                all_OK = False
         else:
             # One sequence is longer than the other
             event_matches.append(False)
     
-    # Calculate match score
-    if max_length > 0:
-        match_score = matched_events / max_length
-    else:
-        match_score = 1.0  # Perfect match if both sequences are empty
-    
-    return {
-        'match_score': match_score,
-        'matched_events': matched_events,
-        'total_events': max_length,
-        'event_matches': event_matches,
-        'actual_sequence': actual_sequence,
-        'sim_sequence': sim_sequence
-    }
-
-
+    return event_matches
