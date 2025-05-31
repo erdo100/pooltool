@@ -38,6 +38,17 @@ def evaluate_loss(sim_env, shot_actual, method="distance"):
     sim_hit = sim_env.get_events(sim_env)
     act_hit = shot_actual["hit"]
 
+    # Initialize losses dictionary
+    losses = {
+        "total": 0,
+        "ball": [
+            {"time": [], "distance": [], "total": []},
+            {"time": [], "distance": [], "total": []},
+            {"time": [], "distance": [], "total": []},
+        ],
+    }
+
+
     if method == "eventbased":
         # Step 1: Convert hit data to chronologically ordered tables
         act_events = convert_hits_to_chronological_table(act_hit)
@@ -45,37 +56,35 @@ def evaluate_loss(sim_env, shot_actual, method="distance"):
 
         # Step 2: Compare the chronological event sequences
         comparison_result = compare_chronological_events(act_events, sim_events)
+ 
+        losses =  loss_fun_eventbased(losses, sim_t, balls_rvw, shot_actual, sim_hit, act_hit, act_events, sim_events, comparison_result)
 
 
-    # loop over all balls
-    for balli in range(3):
-        losses["ball"][balli]["time"] = []
-        losses["ball"][balli]["distance"] = []
-        losses["ball"][balli]["total"] = []
-        
-        sim_x = balls_rvw[balli][:, 0, 0]
-        sim_y = balls_rvw[balli][:, 0, 1]
+    elif method == "distance":
+        # loop over all balls
+        for balli in range(3):
+            
+            sim_x = balls_rvw[balli][:, 0, 0]
+            sim_y = balls_rvw[balli][:, 0, 1]
 
-        act_t = shot_actual['Ball'][balli]["t"]
-        act_x = shot_actual['Ball'][balli]["x"]
-        act_y = shot_actual['Ball'][balli]["y"]
+            act_t = shot_actual['Ball'][balli]["t"]
+            act_x = shot_actual['Ball'][balli]["x"]
+            act_y = shot_actual['Ball'][balli]["y"]
 
-        # arrayify
-        act_t = np.array(act_t)
-        act_x = np.array(act_x)
-        act_y = np.array(act_y)
-        sim_t = np.array(sim_t)
-        sim_x = np.array(sim_x)
-        sim_y = np.array(sim_y)        
-        t_interp, sim_x_interp, sim_y_interp, act_x_interp, act_y_interp = interpolate_ball(act_t, act_x, act_y, sim_t, sim_x, sim_y)
+            # arrayify
+            act_t = np.array(act_t)
+            act_x = np.array(act_x)
+            act_y = np.array(act_y)
+            sim_t = np.array(sim_t)
+            sim_x = np.array(sim_x)
+            sim_y = np.array(sim_y)
+            t_interp, sim_x_interp, sim_y_interp, act_x_interp, act_y_interp = interpolate_ball(act_t, act_x, act_y, sim_t, sim_x, sim_y)
 
-        if method == "distance":
             losses =  loss_func_distance(balli, losses, t_interp, sim_x_interp, sim_y_interp, act_x_interp, act_y_interp)
-        
-        elif method == "eventbased":
-            loss_fun_eventbased(balli, losses, sim_t, sim_x, sim_y, act_t, act_x, act_y, sim_hit, act_hit, act_events, sim_events)
+            
 
-        # calculate total loss for the ball
+    # calculate total loss for the ball
+    for balli in range(3):
         losses["total"] += np.sum(losses["ball"][balli]["total"]) 
 
     return losses
@@ -93,66 +102,77 @@ def loss_func_distance(balli, losses, t_interp, sim_x_interp, sim_y_interp, act_
 
     return losses
 
-def loss_fun_eventbased(balli, losses, sim_t, sim_x, sim_y, act_t, act_x, act_y, sim_hit, act_hit, act_events, sim_events):
+def loss_fun_eventbased(losses, sim_t, balls_rvw, shot_actual, sim_hit, act_hit, act_events, sim_events, comp_result):
         
     col = ["W", "Y", "R"]
-    current_ball_color = col[balli]
     correct_hit = True
-    loss_hit = 0
-    loss_distance = 0
-    current_time = 0
     loss_hit_std = 1
-    losses["ball"][balli]["time"].append(0)
-    losses["ball"][balli]["total"].append(0)
 
     # run through events based on actual data and simulation data
-    # Starts with Start and look to the next event
-    # total_events = range(max(len(act_hit["with"]), len(sim_hit["with"]))-1)
-    total_events = range(len(act_events)-1)
-    for ei in total_events:
+    for ei in range(len(act_events['events'])):
+        loss_hit = 0
+        loss_distance = 0
 
-        # how the code should work?
-        # check in 
+        if correct_hit == True:
+
+            # identify ball index based on "event"
+            ball1i = col.index(act_events['events'][ei][0])
+            # check whther secong letter is in col
+            if act_events['events'][ei][1] in col:
+                ball2i = col.index(act_events['events'][ei][1])
+                hittype = "ball-ball"
+            else:
+                hittype = "ball-cushion"
+
+            loss_distance_b1, current_time = distance_loss_event(ball1i, ei, act_events, sim_events, act_hit, sim_hit, shot_actual, balls_rvw, sim_t)
+            loss_distance_b2 = 0
+            # if ball-ball hit
+            # calculate distance loss for ball2i
+            if hittype == "ball-ball":
+
+                loss_distance_b2, current_time = distance_loss_event(ball2i, ei, act_events, sim_events, act_hit, sim_hit, shot_actual, balls_rvw, sim_t)
+
+
+        # check whether event is in sim_events and act_events
+        if ei < len(sim_events['events']):
+            if act_events['events'][ei] == sim_events['events'][ei]:
+                correct_hit = True
+            else:
+                correct_hit = False
+                loss_hit = loss_hit_std
+
+        else:
+            correct_hit = False
+            loss_hit = loss_hit_std
+
         # assign the loss
-        losses["ball"][balli]["time"].append(ei)
-        losses["ball"][balli]["total"].append(loss_hit + loss_distance)
+        losses["ball"][ball1i]["time"].append(ei)
+        losses["ball"][ball1i]["total"].append(loss_hit + loss_distance_b1)
+        if hittype == "ball-ball":
+            losses["ball"][ball2i]["time"].append(ei)
+            losses["ball"][ball2i]["total"].append(loss_hit + loss_distance_b2)
 
     return losses
 
-def distance_loss_event(ei, sim_t, sim_x, sim_y, sim_hit, act_t, act_x, act_y, act_hit):
-
-    if ei <= len(act_hit["with"])-2:
-        event_time = act_hit["t"][ei]
-        t_act0_ind = np.where(act_t >= event_time)[0][0]
-        event_time = act_hit["t"][ei+1]
-        t_act1_ind = np.where(act_t >= event_time)[0][0]
-    elif ei <= len(act_hit["with"])-1: 
-        event_time = act_hit["t"][ei]
-        t_act0_ind = np.where(act_t >= event_time)[0][0]
-        event_time = act_t[-1]
-        t_act1_ind = np.where(act_t >= event_time)[0][0]
+def distance_loss_event(balli, ei, act_events, sim_events, act_hit, sim_hit, shot_actual, balls_rvw, sim_t):
 
 
-    if ei <= len(sim_hit["with"])-2:
-        event_time = sim_hit["t"][ei]
-        t_sim0_ind = np.where(sim_t >= event_time)[0][0]
-        event_time = sim_hit["t"][ei+1]
-        t_sim1_ind = np.where(sim_t >= event_time)[0][0]
+    act_t = np.array(shot_actual["Ball"][balli]["t"])
 
-    elif ei <= len(sim_hit["with"])-1:
-        event_time = sim_hit["t"][ei]
-        t_sim0_ind = np.where(sim_t >= event_time)[0][0]
-        event_time = sim_t[-1]
-        t_sim1_ind = np.where(sim_t >= event_time)[0][0]
+    act_ei_ind = np.where(act_t >= act_events['times'][ei])[0][0]
+    sim_ei_ind = np.where(sim_t >= sim_events['times'][ei])[0][0]
+    # find the time index of the of ei-1 and ei in act_hit and sim_hit
+    act_e1_ind = act_ei_ind - 1
+    sim_e1_ind = sim_ei_ind - 1
 
+    # calculate distance loss for ball1i
+    t0 = sim_t[sim_e1_ind:sim_ei_ind]
+    x0 = balls_rvw[balli][sim_e1_ind:sim_ei_ind, 0, 0]
+    y0 = balls_rvw[balli][sim_e1_ind:sim_ei_ind, 0, 1]
 
-    t0 = sim_t[t_sim0_ind:t_sim1_ind]
-    x0 = sim_x[t_sim0_ind:t_sim1_ind]
-    y0 = sim_y[t_sim0_ind:t_sim1_ind]
-
-    t1 = act_t[t_act0_ind:t_act1_ind]
-    x1 = act_x[t_act0_ind:t_act1_ind]
-    y1 = act_y[t_act0_ind:t_act1_ind]
+    t1 = act_t[act_e1_ind:act_ei_ind]
+    x1 = shot_actual["Ball"][balli]["x"][act_e1_ind:act_ei_ind]
+    y1 = shot_actual["Ball"][balli]["y"][act_e1_ind:act_ei_ind]
 
     tmin = min(t0[0], t1[0])
     tmax = max(t0[-1], t1[-1])
