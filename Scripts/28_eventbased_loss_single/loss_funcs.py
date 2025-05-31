@@ -38,13 +38,13 @@ def evaluate_loss(sim_env, shot_actual, method="distance"):
     sim_hit = sim_env.get_events(sim_env)
     act_hit = shot_actual["hit"]
 
-    # Initialize losses dictionary
+    # Initialize losses dictionary with zeros
     losses = {
         "total": 0,
         "ball": [
-            {"time": [], "distance": [], "total": []},
-            {"time": [], "distance": [], "total": []},
-            {"time": [], "distance": [], "total": []},
+            {"time": [0], "total": [0]},
+            {"time": [0], "total": [0]},
+            {"time": [0], "total": [0]},
         ],
     }
 
@@ -105,24 +105,33 @@ def loss_func_distance(balli, losses, t_interp, sim_x_interp, sim_y_interp, act_
 def loss_fun_eventbased(losses, sim_t, balls_rvw, shot_actual, sim_hit, act_hit, act_events, sim_events, comp_result):
         
     col = ["W", "Y", "R"]
+    allbi = [0, 1, 2]
     correct_hit = True
-    loss_hit_std = 1
 
     # run through events based on actual data and simulation data
     for ei in range(len(act_events['events'])):
-        loss_hit = 0
-        loss_distance = 0
+        allbi = [0, 1, 2]
+        loss_hit_b1 = 1
+        loss_hit_b2 = 1
+        loss_distance_b1 = 0
+        loss_distance_b2 = 0
+
+
+        # identify ball index based on "event"
+        ball1i = col.index(act_events['events'][ei][0])
+        # check whther secong letter is in col
+        if act_events['events'][ei][1] in col:
+            ball2i = col.index(act_events['events'][ei][1])
+            hittype = "ball-ball"
+            ball3i = 3 - ball1i - ball2i  # the third ball index
+        else:
+            hittype = "ball-cushion"
+            # remove from allbi = [0, 1, 2] ball1i
+            allbi.remove(ball1i)
+            ball2i = allbi[0]
+            ball3i = allbi[1]
 
         if correct_hit == True:
-
-            # identify ball index based on "event"
-            ball1i = col.index(act_events['events'][ei][0])
-            # check whther secong letter is in col
-            if act_events['events'][ei][1] in col:
-                ball2i = col.index(act_events['events'][ei][1])
-                hittype = "ball-ball"
-            else:
-                hittype = "ball-cushion"
 
             loss_distance_b1, current_time = distance_loss_event(ball1i, ei, act_events, sim_events, act_hit, sim_hit, shot_actual, balls_rvw, sim_t)
             loss_distance_b2 = 0
@@ -133,24 +142,30 @@ def loss_fun_eventbased(losses, sim_t, balls_rvw, shot_actual, sim_hit, act_hit,
                 loss_distance_b2, current_time = distance_loss_event(ball2i, ei, act_events, sim_events, act_hit, sim_hit, shot_actual, balls_rvw, sim_t)
 
 
-        # check whether event is in sim_events and act_events
-        if ei < len(sim_events['events']):
-            if act_events['events'][ei] == sim_events['events'][ei]:
-                correct_hit = True
+            # check whether event is in sim_events and act_events
+            if ei < len(sim_events['events']):
+                if act_events['events'][ei] == sim_events['events'][ei]:
+                    loss_hit_b1 = 0
+                    if hittype == "ball-ball":
+                        loss_hit_b2 = 0
+                else:
+                    correct_hit = False
+
             else:
                 correct_hit = False
-                loss_hit = loss_hit_std
-
-        else:
-            correct_hit = False
-            loss_hit = loss_hit_std
 
         # assign the loss
         losses["ball"][ball1i]["time"].append(ei)
-        losses["ball"][ball1i]["total"].append(loss_hit + loss_distance_b1)
+        losses["ball"][ball1i]["total"].append(loss_hit_b1 + loss_distance_b1)
         if hittype == "ball-ball":
             losses["ball"][ball2i]["time"].append(ei)
-            losses["ball"][ball2i]["total"].append(loss_hit + loss_distance_b2)
+            losses["ball"][ball2i]["total"].append(loss_hit_b2 + loss_distance_b2)
+        else:
+            losses["ball"][ball2i]["time"].append(ei)
+            losses["ball"][ball2i]["total"].append(0)
+
+        losses["ball"][ball3i]["time"].append(ei)
+        losses["ball"][ball3i]["total"].append(0)
 
     return losses
 
