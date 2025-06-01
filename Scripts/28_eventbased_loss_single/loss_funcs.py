@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.interpolate import interp1d
-
+import time
 
 
 def interpolate_ball(act_t, act_x, act_y, sim_t, sim_x, sim_y):
@@ -32,6 +32,7 @@ def calculate_distance_loss(t, act_x, act_y, sim_x, sim_y):
 
 
 def evaluate_loss(sim_env, shot_actual, method="distance"):
+    starttime = time.time()
 
     sim_t, white_rvw, yellow_rvw, red_rvw = sim_env.get_ball_routes()
     balls_rvw = [white_rvw, yellow_rvw, red_rvw]
@@ -87,6 +88,9 @@ def evaluate_loss(sim_env, shot_actual, method="distance"):
     for balli in range(3):
         losses["total"] += np.sum(losses["ball"][balli]["total"]) 
 
+    endtime = time.time()
+    #print("Loss calculation took", endtime - starttime, "seconds")
+    
     return losses
         # print("ball", balli, ", loss=", losses["ball"][balli]["total"])
 
@@ -133,17 +137,14 @@ def loss_fun_eventbased(losses, sim_t, balls_rvw, shot_actual, sim_hit, act_hit,
 
         if correct_hit == True:
 
-            loss_distance_b1, current_time = distance_loss_event(ball1i, ei, act_events, sim_events, act_hit, sim_hit, shot_actual, balls_rvw, sim_t)
-            loss_distance_b2 = 0
-            # if ball-ball hit
-            # calculate distance loss for ball2i
-            if hittype == "ball-ball":
-
-                loss_distance_b2, current_time = distance_loss_event(ball2i, ei, act_events, sim_events, act_hit, sim_hit, shot_actual, balls_rvw, sim_t)
-
-
-            # check whether event is in sim_events and act_events
             if ei < len(sim_events['events']):
+                loss_distance_b1, current_time = distance_loss_event(ball1i, ei, act_events, sim_events, act_hit, sim_hit, shot_actual, balls_rvw, sim_t)
+                loss_distance_b2 = 0
+
+                if hittype == "ball-ball":
+                    loss_distance_b2, current_time = distance_loss_event(ball2i, ei, act_events, sim_events, act_hit, sim_hit, shot_actual, balls_rvw, sim_t)
+
+                # check whether event is in sim_events and act_events
                 if act_events['events'][ei] == sim_events['events'][ei]:
                     loss_hit_b1 = 0
                     if hittype == "ball-ball":
@@ -237,7 +238,7 @@ def convert_hits_to_chronological_table(hit_data):
     
     # Ball color mapping
     ball_colors = ['W', 'Y', 'R']
-    cushion_numbers = ['1', '2', '3', '4']
+    cushion_numbers = ['0', '1', '2', '3']
     ball_order = {'W': 0, 'Y': 1, 'R': 2}
     
     # Process each ball's collision data

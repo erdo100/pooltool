@@ -12,11 +12,8 @@ import numpy as np
 from scipy.interpolate import interp1d
 import pickle
 from tkinter import filedialog
-
 import copy
-
 from pathlib import Path
-
 from loss_funcs import evaluate_loss
 
 def open_shotfile(file_name=None):

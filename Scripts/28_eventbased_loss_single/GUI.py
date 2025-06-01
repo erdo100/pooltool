@@ -10,7 +10,8 @@ from tkinter import *
 from tkinter import Menu
 
 import pooltool as pt
-from helper_funcs import get_ball_spins, run_study, get_ball_positions, open_shotfile, evaluate_loss, save_parameters, load_parameters, save_system, abs_velocity
+from helper_funcs import get_ball_spins, run_study, get_ball_positions, open_shotfile, save_parameters, load_parameters, save_system, abs_velocity
+from loss_funcs import evaluate_loss
 import multiprocessing as mp
 import copy
 from pathlib import Path

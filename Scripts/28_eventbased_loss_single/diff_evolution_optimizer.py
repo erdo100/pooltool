@@ -15,8 +15,8 @@ from helper_funcs import get_ball_positions
 
 class DEOptimizer:
     def __init__(self, shot_actual, params, balls_xy_ini, ball_cols, maxiter, selected_params=None,
-                 popsize=(50, 50), mutation=(1.0, 0.5), recombination=(0.9, 0.5), 
-                 strategy='rand2bin', polish=False):
+                 popsize=(50, 50), mutation=(0.5, 0.5), recombination=(0.7, 0.5), 
+                 strategy='best1bin', polish=False):
 
         self.sim_env = BilliardEnv()
         self.shot_actual = shot_actual
@@ -125,8 +125,8 @@ class DEOptimizer:
         # Number of parameters + 1 (for the loss plot)
         num_params = len(self.parameter_history[-1])
         param_names = self.selected_params
-        rows = int(np.ceil(np.sqrt(num_params + 1)))
-        cols = int(np.ceil((num_params + 1) / rows))
+        rows = int(np.ceil(np.sqrt(num_params + 2)))
+        cols = int(np.ceil((num_params + 2) / rows))
         
         # Plot loss history
         plt.subplot(rows, cols, 1)
@@ -135,9 +135,17 @@ class DEOptimizer:
         plt.ylabel('Loss')
         plt.title('Loss Function History')
         plt.grid(True)
+        print(f"Current Loss: {self.loss_history[-1]:.10f}")
+
+        plt.subplot(rows, cols, 2)
+        plt.plot(self.all_x, self.all_y, 'bo')
+        plt.xlabel('X')
+        plt.ylabel('Loss')
+        plt.title('Loss Function History')
+        plt.grid(True)
 
         for i, name in enumerate(self.selected_params):
-            plt.subplot(rows, cols, i + 2)
+            plt.subplot(rows, cols, i + 3)
             param_values = [p[i] for p in self.parameter_history]
             plt.plot(param_values, 'r-')
             plt.title(name)
@@ -160,30 +168,31 @@ class DEOptimizer:
         unscaled = self.unscale_params(xk, self.bounds)
         self.parameter_history.append(unscaled.copy())
         self.loss_history.append(loss)
+        print(f"Current loss: {loss:.10f} | Parameters: {unscaled}")
         self.plot_convergence(convergence)
 
     def run_optimization(self):
 
         init_population = None
 
-        file_path = filedialog.askopenfilename(title="Load initial population", filetypes=[("Pickle", "*.pkl")])
-        if file_path:
-            with open(file_path, 'rb') as f:
-                init_population = pickle.load(f)
-            print("Initial population loaded from file.")
-        else:
-            print("Creating new initial population.")
-            # Your custom candidate - only for selected parameters
-            my_candidate = np.array([self.base_params.value[key] for key in self.selected_params])
-            my_candidate_scaled = self.scale_params(my_candidate, self.bounds)
-            # my_candidate_scaled = my_candidate_scaled.reshape((1, len(self.bounds)))
+        # file_path = False # filedialog.askopenfilename(title="Load initial population", filetypes=[("Pickle", "*.pkl")])
+        # if file_path:
+        #     with open(file_path, 'rb') as f:
+        #         init_population = pickle.load(f)
+        #     print("Initial population loaded from file.")
+        # else:
+        #     print("Creating new initial population.")
+        #     # Your custom candidate - only for selected parameters
+        #     my_candidate = np.array([self.base_params.value[key] for key in self.selected_params])
+        #     my_candidate_scaled = self.scale_params(my_candidate, self.bounds)
+        #     # my_candidate_scaled = my_candidate_scaled.reshape((1, len(self.bounds)))
 
-            # random population
-            sampler = qmc.LatinHypercube(d=len(self.bounds))
-            random_samples = sampler.random(n=self.pop_start*len(self.bounds) - 1)  # reserve 1 spot for your candidate
+        #     # random population
+        #     sampler = qmc.LatinHypercube(d=len(self.bounds))
+        #     random_samples = sampler.random(n=self.pop_start*len(self.bounds) - 1)  # reserve 1 spot for your candidate
 
-            # Insert your candidate
-            init_population = np.vstack([my_candidate_scaled, random_samples])
+        #     # Insert your candidate
+        #     init_population = np.vstack([my_candidate_scaled, random_samples])
 
         result = None
 
@@ -198,17 +207,17 @@ class DEOptimizer:
                 func=self._loss_wrapper,
                 bounds=bounds_scaled,
                 strategy='rand2bin',
-                maxiter=1,  # Adjust as needed; 1 for per-generation iteration
+                maxiter=100,  # Adjust as needed; 1 for per-generation iteration
                 mutation=mut,
                 recombination=rec,
                 popsize=curr_pop,
                 updating='deferred',
                 callback=self.callback_fn,
-                tol=0.001,
+                tol=0.01,
                 polish=False,
-                disp=False,
-                init=init_population,
-                workers=-1
+                disp=True,
+                init='latinhypercube',  #init_population,
+                workers=1
             )
             init_population = result.population
             # timestamp = time.strftime("%Y%m%d_%H%M%S")
