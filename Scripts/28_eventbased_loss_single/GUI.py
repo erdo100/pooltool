@@ -395,18 +395,20 @@ class plot_3cushion():
         """Calculate appropriate resolution based on parameter range"""
         range_val = max_val - min_val
 
-        if range_val > 100:
-            return 0.1
-        elif range_val > 10:
-            return 0.1
-        elif range_val > 1:
-            return 0.01
-        elif range_val > 0.1:
-            return 0.001
-        elif range_val > 0.01:
-            return 0.0001
-        else:
-            return 0.00001
+        # if range_val > 100:
+        #     return 0.1
+        # elif range_val > 10:
+        #     return 0.1
+        # elif range_val > 1:
+        #     return 0.01
+        # elif range_val > 0.1:
+        #     return 0.001
+        # elif range_val > 0.01:
+        #     return 0.0001
+        # else:
+        #     return 0.00001
+
+        return 1e-6
 
     def add_slider(self, master, key, frm, to, res, label, cmd=None, include_checkbox=True):
         """Add a slider to the frame with optional checkbox and enhanced interactions"""
