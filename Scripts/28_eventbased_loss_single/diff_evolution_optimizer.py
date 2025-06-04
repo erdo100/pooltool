@@ -15,7 +15,7 @@ from helper_funcs import get_ball_positions
 
 class DEOptimizer:
     def __init__(self, shot_actual, params, balls_xy_ini, ball_cols, maxiter, selected_params=None,
-                 popsize=(50, 50), mutation=(0.5, 0.5), recombination=(0.7, 0.5), 
+                 popsize=50, mutation=(0.5, 1.5), recombination=0.9, 
                  strategy='best1bin', polish=False):
 
         self.sim_env = BilliardEnv()
@@ -34,9 +34,9 @@ class DEOptimizer:
               # Create bounds only for selected parameters
         self.bounds = [self.base_params.limits[key] for key in self.selected_params]
         self.maxiter = maxiter
-        self.pop_start, self.pop_end = (popsize, popsize) if isinstance(popsize, int) else popsize
-        self.mut_start, self.mut_end = mutation
-        self.rec_start, self.rec_end = recombination
+        self.pop_size = popsize
+        self.mutation = mutation
+        self.recombination = recombination
         self.strategy = strategy
         self.polish = polish
         self.parameter_history = []
@@ -85,7 +85,7 @@ class DEOptimizer:
         # Print the iteration, formatted parameters, and convergence
         print(f"Iteration {len(self.parameter_history)} - Loss: {self.loss_history[-1]:.10f} - Best Params: [{formatted_params}], Convergence: {convergence:.5f}")
           # Create a separate optimization figure if it doesn't exist
-        if not hasattr(self, 'opt_fig') or self.opt_fig is None:
+        if len(self.parameter_history) == 1: #not hasattr(self, 'opt_fig') or self.opt_fig is None:
             print("Creating new optimization figure...")
             # Store current interactive state and figure
             was_interactive = plt.isinteractive()
@@ -94,71 +94,71 @@ class DEOptimizer:
             # Temporarily enable interactive mode for figure creation
             plt.ion()
             self.opt_fig = plt.figure(figsize=(12, 8))
-            self.opt_fig_created = True  # Flag to track figure creation
-            self.opt_fig.canvas.manager.set_window_title('Optimization Progress')
+        #     self.opt_fig_created = True  # Flag to track figure creation
+        #     self.opt_fig.canvas.manager.set_window_title('Optimization Progress')
             
-            # Position the window to avoid overlap with main GUI
-            mngr = self.opt_fig.canvas.manager
-            if hasattr(mngr, 'window'):
-                if hasattr(mngr.window, 'wm_geometry'):
-                    mngr.window.wm_geometry("+100+100")  # Position window
-                # Prevent window from stealing focus
-                if hasattr(mngr.window, 'attributes'):
-                    mngr.window.attributes('-topmost', False)
-                    mngr.window.focus_set = lambda: None  # Disable focus stealing
+        #     # Position the window to avoid overlap with main GUI
+        #     mngr = self.opt_fig.canvas.manager
+        #     if hasattr(mngr, 'window'):
+        #         if hasattr(mngr.window, 'wm_geometry'):
+        #             mngr.window.wm_geometry("+100+100")  # Position window
+        #         # Prevent window from stealing focus
+        #         if hasattr(mngr.window, 'attributes'):
+        #             mngr.window.attributes('-topmost', False)
+        #             mngr.window.focus_set = lambda: None  # Disable focus stealing
             
-            # Restore previous interactive state and figure
-            if not was_interactive:
-                plt.ioff()
-            plt.figure(current_fig.number)
+        #     # Restore previous interactive state and figure
+        #     if not was_interactive:
+        #         plt.ioff()
+        #     plt.figure(current_fig.number)
         
-        # Update the optimization figure without changing focus
-        current_fig = plt.gcf()
+        # # Update the optimization figure without changing focus
+        # current_fig = plt.gcf()
         
-        # Switch to optimization figure temporarily
-        plt.figure(self.opt_fig.number)
-        plt.clf()
+        # # Switch to optimization figure temporarily
+        # plt.figure(self.opt_fig.number)
+        # plt.clf()
         
-        # Number of parameters + 1 (for the loss plot)
-        num_params = len(self.parameter_history[-1])
-        param_names = self.selected_params
-        rows = int(np.ceil(np.sqrt(num_params + 1)))
-        cols = int(np.ceil((num_params + 1) / rows))
+        # # Number of parameters + 1 (for the loss plot)
+        # num_params = len(self.parameter_history[-1])
+        # param_names = self.selected_params
+        # rows = int(np.ceil(np.sqrt(num_params + 1)))
+        # cols = int(np.ceil((num_params + 1) / rows))
         
-        # Plot loss history
-        plt.subplot(rows, cols, 1)
-        plt.plot(self.loss_history, 'b-')
-        plt.xlabel('Generation')
-        plt.ylabel('Loss')
-        plt.title('Loss Function History')
-        plt.grid(True)
-        print(f"Current Loss: {self.loss_history[-1]:.10f}")
+        # # Plot loss history
+        # plt.subplot(rows, cols, 1)
+        # plt.plot(self.loss_history, 'b-')
+        # plt.xlabel('Generation')
+        # plt.ylabel('Loss')
+        # plt.title('Loss Function History')
+        # plt.grid(True)
+        # print(f"Current Loss: {self.loss_history[-1]:.10f}")
 
-        for i, name in enumerate(self.selected_params):
-            plt.subplot(rows, cols, i + 2)
-            param_values = [p[i] for p in self.parameter_history]
-            plt.plot(param_values, 'r-')
-            plt.title(name)
-            low, high = self.bounds[i]
-            plt.ylim(low, high)  # Set y-axis limits to parameter bounds
-            plt.grid(True)
+        # for i, name in enumerate(self.selected_params):
+        #     plt.subplot(rows, cols, i + 2)
+        #     param_values = [p[i] for p in self.parameter_history]
+        #     plt.plot(param_values, 'r-')
+        #     plt.title(name)
+        #     low, high = self.bounds[i]
+        #     plt.ylim(low, high)  # Set y-axis limits to parameter bounds
+        #     plt.grid(True)
         
-        plt.tight_layout()
+        # plt.tight_layout()
         
-        # Update the figure without stealing focus
-        self.opt_fig.canvas.draw_idle()
-        self.opt_fig.canvas.flush_events()
+        # # Update the figure without stealing focus
+        # self.opt_fig.canvas.draw_idle()
+        # self.opt_fig.canvas.flush_events()
         
-        # Return to the original figure
-        if current_fig != self.opt_fig and plt.fignum_exists(current_fig.number):
-            plt.figure(current_fig.number)
+        # # Return to the original figure
+        # if current_fig != self.opt_fig and plt.fignum_exists(current_fig.number):
+        #     plt.figure(current_fig.number)
 
     def callback_fn(self, xk, convergence):
         loss = self._loss_wrapper(xk)
         unscaled = self.unscale_params(xk, self.bounds)
         self.parameter_history.append(unscaled.copy())
         self.loss_history.append(loss)
-        self.plot_convergence(convergence)
+        # self.plot_convergence(convergence)
 
     def run_optimization(self):
 
@@ -179,7 +179,7 @@ class DEOptimizer:
 
             # random population
             sampler = qmc.LatinHypercube(d=len(self.bounds))
-            random_samples = sampler.random(n=self.pop_start*len(self.bounds) - 1)  # reserve 1 spot for your candidate
+            random_samples = sampler.random(n=self.pop_size*len(self.bounds) - 1)  # reserve 1 spot for your candidate
 
             # Insert your candidate
             init_population = np.vstack([my_candidate_scaled, random_samples])
@@ -190,15 +190,15 @@ class DEOptimizer:
         result = differential_evolution(
             func=self._loss_wrapper,
             bounds=bounds_scaled,
-            strategy='rand2bin',
+            strategy=self.strategy,
             maxiter=self.maxiter,  # Adjust as needed; 1 for per-generation iteration
-            mutation= (self.mut_start, self.mut_end),
-            recombination=self.rec_start,
-            popsize=self.pop_start,
+            mutation=self.mutation,
+            recombination=self.recombination,
+            popsize=self.pop_size,  # Use first element for population size
             updating='deferred',
             callback=self.callback_fn,
             tol=0.01,
-            polish=False,
+            polish=self.polish,
             disp=True,
             init=init_population,
             workers=-1

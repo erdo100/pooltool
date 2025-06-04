@@ -659,24 +659,24 @@ class plot_3cushion():
         
         optimizer = DEOptimizer(shot_actual, self.params, balls_xy_ini, ball_cols, 
                                maxiter=totalruns, selected_params=selected_params, popsize=popsize)
-        try:
-            result, best_params = optimizer.run_optimization()
-            # Get best parameters and update sliders
-            print("Best parameters:")
-            for key in selected_params:
-                if key in self.sliders:
-                    print(f"Updating slider {key} to {best_params.value[key]}")
-                    self.sliders[key].set(best_params.value[key])
+        # try:
+        result, best_params = optimizer.run_optimization()
+        # Get best parameters and update sliders
+        print("Best parameters:")
+        for key in selected_params:
+            if key in self.sliders:
+                print(f"Updating slider {key} to {best_params.value[key]}")
+                self.sliders[key].set(best_params.value[key])
 
-            # Update the main GUI plot after optimization
-            self.update_plot(is_optimization_update=True)
-            
-            print("Optimization completed.")
-        except Exception as e:
-            print(f"Optimization failed with error: {e}")
-            # Re-enable the optimization button in case of error
-            self.start_button.config(state=NORMAL, text="Start Optimization")
-            return
+        # Update the main GUI plot after optimization
+        self.update_plot(is_optimization_update=True)
+        
+        print("Optimization completed.")
+        # except Exception as e:
+        #     print(f"Optimization failed with error: {e}")
+        #     # Re-enable the optimization button in case of error
+        #     self.start_button.config(state=NORMAL, text="Start Optimization")
+        #     return
 
         # Re-enable the optimization button at the end
         self.start_button.config(state=NORMAL, text="Start Optimization")
