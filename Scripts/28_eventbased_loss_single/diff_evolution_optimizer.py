@@ -82,18 +82,23 @@ class DEOptimizer:
         # Format each parameter in best_params to 5 decimal places
         formatted_params = ", ".join(f"{param:.5f}" for param in self.parameter_history[-1])
 
+        it = len(self.loss_history)
+        if it == 1:
         # Print the iteration, formatted parameters, and convergence
-        print(f"Iteration {len(self.parameter_history)} - Loss: {self.loss_history[-1]:.10f} - Best Params: [{formatted_params}], Convergence: {convergence:.5f}")
-          # Create a separate optimization figure if it doesn't exist
-        if len(self.parameter_history) == 1: #not hasattr(self, 'opt_fig') or self.opt_fig is None:
-            print("Creating new optimization figure...")
-            # Store current interactive state and figure
-            was_interactive = plt.isinteractive()
-            current_fig = plt.gcf()
+            print(f"Iteration {it} - Loss: {self.loss_history[-1]:.10f} - Best Params: [{formatted_params}], Convergence: {convergence:.5f}")
+        elif self.loss_history[-1] < self.loss_history[-2]:
+            print(f"Iteration {it} - Loss: {self.loss_history[-1]:.10f} - Best Params: [{formatted_params}], Convergence: {convergence:.5f}")
+
+        # Create a separate optimization figure if it doesn't exist
+        # if len(self.parameter_history) == 1: #not hasattr(self, 'opt_fig') or self.opt_fig is None:
+        #     print("Creating new optimization figure...")
+        #     # Store current interactive state and figure
+        #     was_interactive = plt.isinteractive()
+        #     current_fig = plt.gcf()
             
-            # Temporarily enable interactive mode for figure creation
-            plt.ion()
-            self.opt_fig = plt.figure(figsize=(12, 8))
+        #     # Temporarily enable interactive mode for figure creation
+        #     plt.ion()
+        #     self.opt_fig = plt.figure(figsize=(12, 8))
         #     self.opt_fig_created = True  # Flag to track figure creation
         #     self.opt_fig.canvas.manager.set_window_title('Optimization Progress')
             
@@ -158,7 +163,7 @@ class DEOptimizer:
         unscaled = self.unscale_params(xk, self.bounds)
         self.parameter_history.append(unscaled.copy())
         self.loss_history.append(loss)
-        # self.plot_convergence(convergence)
+        self.plot_convergence(convergence)
 
     def run_optimization(self):
 
@@ -199,7 +204,7 @@ class DEOptimizer:
             callback=self.callback_fn,
             tol=0.01,
             polish=self.polish,
-            disp=True,
+            disp=False,
             init=init_population,
             workers=-1
         )

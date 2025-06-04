@@ -34,11 +34,11 @@ class Parameters:
         self.limits = {}
         self.limits = {
             # Shot parameters
-            'shot_a': (-0.5, 0.5),
-            'shot_b': (-0.5, 0.5),
-            'shot_phi': (-180, 180),
-            'shot_v': (1.0, 8.0),
-            'shot_theta': (0.0, 90.0),
+            'shot_a': (-0.5, 0.),
+            'shot_b': (-0, 0.5),
+            'shot_phi': (-81, -79),
+            'shot_v': (4.0, 5.0),
+            'shot_theta': (0.0, 10.0),
 
             'physics_ballball_a': (0.001, 0.3),
             'physics_ballball_b': (0.0, 1),

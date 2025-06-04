@@ -115,11 +115,11 @@ def loss_fun_eventbased(losses, sim_t, balls_rvw, shot_actual, sim_hit, act_hit,
     # run through events based on actual data and simulation data
     for ei in range(len(act_events['events'])):
         allbi = [0, 1, 2]
-        loss_hit_b1 = 1
-        loss_hit_b2 = 1
+        loss_hit_b1 = 10
+        loss_hit_b2 = 10
         loss_distance_b1 = 0
         loss_distance_b2 = 0
-
+        current_time = act_events['times'][ei]
 
         # identify ball index based on "event"
         ball1i = col.index(act_events['events'][ei][0])
@@ -155,17 +155,19 @@ def loss_fun_eventbased(losses, sim_t, balls_rvw, shot_actual, sim_hit, act_hit,
             else:
                 correct_hit = False
 
+        loss_weight = len(act_events['events']) - ei
+
         # assign the loss
-        losses["ball"][ball1i]["time"].append(ei)
-        losses["ball"][ball1i]["total"].append(loss_hit_b1 + loss_distance_b1)
+        losses["ball"][ball1i]["time"].append(current_time)
+        losses["ball"][ball1i]["total"].append(loss_hit_b1 + loss_distance_b1*loss_weight)
         if hittype == "ball-ball":
-            losses["ball"][ball2i]["time"].append(ei)
-            losses["ball"][ball2i]["total"].append(loss_hit_b2 + loss_distance_b2)
+            losses["ball"][ball2i]["time"].append(current_time)
+            losses["ball"][ball2i]["total"].append(loss_hit_b2 + loss_distance_b2*loss_weight)
         else:
-            losses["ball"][ball2i]["time"].append(ei)
+            losses["ball"][ball2i]["time"].append(current_time)
             losses["ball"][ball2i]["total"].append(0)
 
-        losses["ball"][ball3i]["time"].append(ei)
+        losses["ball"][ball3i]["time"].append(current_time)
         losses["ball"][ball3i]["total"].append(0)
 
     return losses
@@ -204,8 +206,64 @@ def distance_loss_event(balli, ei, act_events, sim_events, act_hit, sim_hit, sho
     distance = np.sqrt((act_x_interp - sim_x_interp) ** 2 + (act_y_interp - sim_y_interp) ** 2)
     loss_distance = np.sum(distance)/2.84/len(tloss)
 
-    return loss_distance, tmax
 
+    # if ei is the last event of that ball, then calculate loss diatnce from the last event until end of time
+    # check in sim_hit for the current ball are more events after the current event
+    # Find the index in sim_hit[balli]['t'] that matches sim_events['times'][ei] within a tolerance of +/-0.01s
+    sim_event_time = sim_events['times'][ei]
+    sim_ei_times = np.array(sim_hit[balli]['t'])
+    time_diffs = np.abs(sim_ei_times - sim_event_time)
+    matching_indices = np.where(time_diffs <= 0.01)[0]
+    sim_is_end = False
+    if len(matching_indices) > 0:
+        ball_ei = matching_indices[0]
+
+        if ball_ei == len(sim_hit[balli]['t']) - 1:
+            # identify the index of last event in sim_hit for the current ball
+            sim_e1_ind = np.where(sim_t >= sim_hit[balli]['t'][ball_ei])[0][0]
+            # calculate distance loss from the last event until end of time
+            t0 = sim_t[sim_e1_ind:]
+            x0 = balls_rvw[balli][sim_e1_ind:, 0, 0]
+            y0 = balls_rvw[balli][sim_e1_ind:, 0, 1]
+            sim_is_end = True
+    
+
+
+    act_event_time = act_events['times'][ei]
+    act_ei_times = np.array(act_hit[balli]['t'])
+    time_diffs = np.abs(act_ei_times - act_event_time)
+    matching_indices = np.where(time_diffs <= 0.01)[0]
+    act_is_end = False
+    if len(matching_indices) > 0:
+        ball_ei = matching_indices[0]
+
+        if ball_ei == len(act_hit[balli]['t']) - 1:
+            act_e1_ind = np.where(act_t >= act_hit[balli]['t'][ball_ei])[0][0]
+            # calculate distance loss from the last event until end of time
+            t1 = act_t[act_e1_ind:]
+            x1 = shot_actual["Ball"][balli]["x"][act_e1_ind:]
+            y1 = shot_actual["Ball"][balli]["y"][act_e1_ind:]
+
+            act_is_end = True
+
+
+
+    if sim_is_end and act_is_end:
+        tmin = min(t0[0], t1[0])
+        tmax = max(t0[-1], t1[-1])
+
+        tloss = np.linspace(tmin, tmax, 200)
+
+        sim_x_interp = interpolate_coordinate(x0, t0, tloss)
+        sim_y_interp = interpolate_coordinate(y0, t0, tloss)
+        act_x_interp = interpolate_coordinate(x1, t1, tloss)
+        act_y_interp = interpolate_coordinate(y1, t1, tloss)
+
+        # calculate loss
+        distance = np.sqrt((act_x_interp - sim_x_interp) ** 2 + (act_y_interp - sim_y_interp) ** 2)
+        loss_distance += np.sum(distance)/2.84/len(tloss)
+
+    return loss_distance, tmax
 
 
 def interpolate_coordinate(simulated, tsim, actual_times):
