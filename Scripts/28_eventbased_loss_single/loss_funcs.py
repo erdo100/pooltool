@@ -111,9 +111,9 @@ def loss_fun_eventbased(losses, sim_t, balls_rvw, shot_actual, sim_hit, act_hit,
     col = ["W", "Y", "R"]
     allbi = [0, 1, 2]
     correct_hit = True
-
+    nevents = len(act_events['events'])
     # run through events based on actual data and simulation data
-    for ei in range(len(act_events['events'])):
+    for ei in range(nevents):
         allbi = [0, 1, 2]
         loss_hit_b1 = 10
         loss_hit_b2 = 10
@@ -155,7 +155,9 @@ def loss_fun_eventbased(losses, sim_t, balls_rvw, shot_actual, sim_hit, act_hit,
             else:
                 correct_hit = False
 
-        loss_weight = len(act_events['events']) - ei
+        # loss weight based on event index. spread is defining factor between first ei and last ei
+        spread = 2
+        loss_weight = (spread -1)/(spread-1)*ei + spread
 
         # assign the loss
         losses["ball"][ball1i]["time"].append(current_time)
