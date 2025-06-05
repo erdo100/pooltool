@@ -32,7 +32,15 @@ class DEOptimizer:
         else:
             self.selected_params = selected_params
               # Create bounds only for selected parameters
-        self.bounds = [self.base_params.limits[key] for key in self.selected_params]
+        
+        self.bounds = []
+        for key in self.selected_params:
+            if key == "shot_phi":
+                # Modify the limit for shot_phi as needed, e.g.:
+                self.bounds.append((self.base_params.value[key]-6, self.base_params.value[key]+6))  # Example: set to [-pi, pi]
+            else:
+                self.bounds.append(self.base_params.limits[key])
+
         self.maxiter = maxiter
         self.pop_size = popsize
         self.mutation = mutation

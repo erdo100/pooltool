@@ -815,9 +815,9 @@ class plot_3cushion():
         self.root.ax[4].set_ylim((0, loss_lim ))
 
         if is_optimization_update:
-            h["title"].set_text(f"OPTIMIZED Shot {shot_id} - loss = {loss['total']:.3f}")
+            h["title"].set_text(f"OPTIMIZED Shot {shot_id} - loss = {distance_dev['total']:.3f}")
         else:
-            h["title"].set_text(f"Shot {shot_id} - loss = {loss['total']:.3f}")
+            h["title"].set_text(f"Shot {shot_id} - loss = {distance_dev['total']:.3f}")
 
         # plt.draw()
         self.root.canvas.draw()  # Update the figure display
