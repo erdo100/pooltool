@@ -169,7 +169,7 @@ class plot_3cushion():
             handles["shotline_simulated"][i] = ax[0].plot(simulated_x[i], simulated_y[i], color=colortable[i], linestyle='-', linewidth=2)
             handles["varline_actual"][i] = ax[i + 1].plot(actual_times, actual_v, label=f"{colortable[i]} actual v in m/s", linestyle='--', linewidth=2)
             handles["varline_simulated"][i] = ax[i + 1].plot(tsim, simulated_v, label=f"{colortable[i]} simulated v in m/s", linestyle='-', linewidth=2)
-            handles["loss"][i] = ax[4].plot(actual_times, actual_v, label=f"{colortable[i]} loss in m", linestyle='-', linewidth=2)
+            handles["loss"][i] = ax[4].plot(actual_times, actual_v, label=f"{colortable[i]} loss in m", linestyle='-', linewidth=2, marker='o', markersize=5)
             
             # Add spin plots for each ball
             handles["spin_roll"][i] = ax[i + 5].plot(tsim, simulated_v, label=f"{colortable[i].capitalize()} Roll spin", linestyle='-', linewidth=2, color='blue')
@@ -723,9 +723,11 @@ class plot_3cushion():
         self.sim_env.simulate_shot()
 
         # calculate the reward
+        distance_dev = evaluate_loss(self.sim_env, shot_actual, method="distance")
         loss = evaluate_loss(self.sim_env, shot_actual, method="eventbased")
 
         tsim, white_rvw, yellow_rvw, red_rvw = self.sim_env.get_ball_routes()        # update the plot with the new data
+        
         loss_max = 0
         colortable = ["white", "yellow", "red"]  # Define color table for ball colors
         for i, rvw in enumerate([white_rvw, yellow_rvw, red_rvw]):
@@ -777,8 +779,8 @@ class plot_3cushion():
             h["spin_top"][i][0].set_data(tsim, top_spin)
             h["spin_side"][i][0].set_data(tsim, side_spin)
 
-            h["loss"][i][0].set_data(loss["ball"][i]["time"], loss["ball"][i]["total"])
-            loss_max = max(loss_max, np.max(loss["ball"][i]["total"]))
+            h["loss"][i][0].set_data(distance_dev["ball"][i]["time"], distance_dev["ball"][i]["total"])
+            loss_max = max(loss_max, np.max(distance_dev["ball"][i]["total"]))
             OM = 10**(np.floor(np.log10(tmax))-1)
             tlim = np.ceil(tmax/OM*1.1)*OM
             

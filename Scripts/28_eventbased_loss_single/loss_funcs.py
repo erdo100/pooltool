@@ -102,8 +102,7 @@ def loss_func_distance(balli, losses, t_interp, sim_x_interp, sim_y_interp, act_
 
     losses["ball"][balli]["time"] = t_interp
     losses["ball"][balli]["total"] = loss_distance
-    losses["total"] += np.sum(losses["ball"][balli]["total"]) 
-
+    losses["total"] += np.sqrt(np.mean(loss_distance**2))
     return losses
 
 def loss_fun_eventbased(losses, sim_t, balls_rvw, shot_actual, sim_hit, act_hit, act_events, sim_events, comp_result):
@@ -115,8 +114,8 @@ def loss_fun_eventbased(losses, sim_t, balls_rvw, shot_actual, sim_hit, act_hit,
     # run through events based on actual data and simulation data
     for ei in range(nevents):
         allbi = [0, 1, 2]
-        loss_hit_b1 = 10
-        loss_hit_b2 = 10
+        loss_hit_b1 = 0
+        loss_hit_b2 = 0
         loss_distance_b1 = 0
         loss_distance_b2 = 0
         current_time = act_events['times'][ei]
@@ -156,8 +155,9 @@ def loss_fun_eventbased(losses, sim_t, balls_rvw, shot_actual, sim_hit, act_hit,
                 correct_hit = False
 
         # loss weight based on event index. spread is defining factor between first ei and last ei
-        spread = 2
-        loss_weight = (spread -1)/(spread-1)*ei + spread
+        max_loss_weight = 3
+        min_loss_weight = 1
+        loss_weight = np.clip(max_loss_weight - ei * max_loss_weight, min_loss_weight, max_loss_weight)
 
         # assign the loss
         losses["ball"][ball1i]["time"].append(current_time)
@@ -205,8 +205,10 @@ def distance_loss_event(balli, ei, act_events, sim_events, act_hit, sim_hit, sho
     act_y_interp = interpolate_coordinate(y1, t1, tloss)
 
     # calculate loss
-    distance = np.sqrt((act_x_interp - sim_x_interp) ** 2 + (act_y_interp - sim_y_interp) ** 2)
-    loss_distance = np.sum(distance)/2.84/len(tloss)
+    distance = np.sqrt((act_x_interp - sim_x_interp) ** 2 + (act_y_interp - sim_y_interp) ** 2)*1000
+    rms = np.sqrt(np.mean(distance**2))
+    # normalize by the length of the actual and simulated path
+    loss_distance = rms / len(tloss)
 
 
     # if ei is the last event of that ball, then calculate loss diatnce from the last event until end of time

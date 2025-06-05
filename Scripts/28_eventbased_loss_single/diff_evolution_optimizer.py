@@ -74,7 +74,7 @@ class DEOptimizer:
         
         self.sim_env.simulate_shot()
 
-        loss = evaluate_loss(self.sim_env, self.shot_actual, method="eventbased")
+        loss = evaluate_loss(self.sim_env, self.shot_actual, method="distance")
 
         return loss["total"]
 
@@ -202,7 +202,7 @@ class DEOptimizer:
             popsize=self.pop_size,  # Use first element for population size
             updating='deferred',
             callback=self.callback_fn,
-            tol=0.01,
+            tol=0.002,
             polish=self.polish,
             disp=False,
             init=init_population,
