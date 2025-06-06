@@ -15,7 +15,7 @@ from helper_funcs import get_ball_positions
 
 class DEOptimizer:
     def __init__(self, shot_actual, params, balls_xy_ini, ball_cols, maxiter, selected_params=None,
-                 popsize=50, mutation=(0.5, 1.5), recombination=0.9, 
+                 popsize=50, mutation=(1.0, 1.0), recombination=0.5, 
                  strategy='best1bin', polish=False):
 
         self.sim_env = BilliardEnv()
