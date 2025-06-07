@@ -210,7 +210,7 @@ class DEOptimizer:
             popsize=self.pop_size,  # Use first element for population size
             updating='deferred',
             callback=self.callback_fn,
-            tol=0.002,
+            tol=0.0001,
             polish=self.polish,
             disp=False,
             init=init_population,

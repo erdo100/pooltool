@@ -64,6 +64,19 @@ class plot_3cushion():
         right_frame = Frame(main_frame)
         right_frame.pack(side=RIGHT, fill=BOTH, expand=True)
         
+          # Loss calculation checkbox frame (at the very top)
+        loss_checkbox_frame = Frame(left_frame)
+        loss_checkbox_frame.pack(side=TOP, fill=X, pady=(5, 10))
+        
+        # Loss calculation checkbox
+        self.loss_calculation_var = BooleanVar(value=True)  # Default to checked
+        self.loss_calculation_checkbox = Checkbutton(
+            loss_checkbox_frame, 
+            text="Loss Calculation", 
+            variable=self.loss_calculation_var,
+            command=self.update_plot
+        )
+        self.loss_calculation_checkbox.pack(anchor='w', padx=5)
         
         # Slider frame
         slider_frame = Frame(left_frame)
@@ -722,9 +735,33 @@ class plot_3cushion():
         self.sim_env.prepare_new_shot(self.params)
         self.sim_env.simulate_shot()
 
-        # calculate the reward
-        distance_dev = evaluate_loss(self.sim_env, shot_actual, method="distance")
-        loss = evaluate_loss(self.sim_env, shot_actual, method="eventbased")
+        # calculate the reward conditionally based on checkbox state
+        if self.loss_calculation_var.get():
+            loss_max = 0
+            tmax = 0
+            distance_dev = evaluate_loss(self.sim_env, shot_actual, method="distance")
+            loss = evaluate_loss(self.sim_env, shot_actual, method="eventbased")
+            for i in range(3):
+                h["loss"][i][0].set_data(distance_dev["ball"][i]["time"], distance_dev["ball"][i]["total"])
+                loss_max = max(loss_max, np.max(distance_dev["ball"][i]["total"]))
+                
+                if loss_max < 0.001:
+                    loss_lim = 0.001
+                else:
+                    OM = 10**(np.floor(np.log10(loss_max))-1)
+                    loss_lim = np.ceil(loss_max/OM*1.1)*OM
+
+                if tmax < max(distance_dev["ball"][i]["time"]):
+                    tmax = max(distance_dev["ball"][i]["time"])
+
+                self.root.ax[4].set_xlim((0, tmax ))
+                self.root.ax[4].set_ylim((0, loss_lim ))
+
+            h["title"].set_text(f"Shot {shot_id} - loss = {distance_dev['total']:.3f}")
+
+
+        else:
+            h["title"].set_text(f"Shot {shot_id}")
 
         tsim, white_rvw, yellow_rvw, red_rvw = self.sim_env.get_ball_routes()        # update the plot with the new data
         
@@ -779,8 +816,6 @@ class plot_3cushion():
             h["spin_top"][i][0].set_data(tsim, top_spin)
             h["spin_side"][i][0].set_data(tsim, side_spin)
 
-            h["loss"][i][0].set_data(distance_dev["ball"][i]["time"], distance_dev["ball"][i]["total"])
-            loss_max = max(loss_max, np.max(distance_dev["ball"][i]["total"]))
             OM = 10**(np.floor(np.log10(tmax))-1)
             tlim = np.ceil(tmax/OM*1.1)*OM
             
@@ -792,8 +827,7 @@ class plot_3cushion():
 
             self.root.ax[i+1].set_xlim((0, tlim))
             self.root.ax[i+1].set_ylim((0, vlim ))
-            
-            # Set spin plot limits
+              # Set spin plot limits
             spin_values = np.concatenate([roll_spin, top_spin, side_spin])
             if len(spin_values) > 0:
                 spin_max = max(abs(np.min(spin_values)), abs(np.max(spin_values)))
@@ -804,20 +838,6 @@ class plot_3cushion():
                     spin_lim = np.ceil(spin_max/OM_spin*1.1)*OM_spin
                 self.root.ax[i+5].set_xlim((0, tlim))
                 self.root.ax[i+5].set_ylim((-spin_lim, spin_lim))
-
-        if loss_max < 0.001:
-            loss_lim = 0.001
-        else:
-            OM = 10**(np.floor(np.log10(loss_max))-1)
-            loss_lim = np.ceil(loss_max/OM*1.1)*OM
-
-        self.root.ax[4].set_xlim((0, tlim ))
-        self.root.ax[4].set_ylim((0, loss_lim ))
-
-        if is_optimization_update:
-            h["title"].set_text(f"OPTIMIZED Shot {shot_id} - loss = {distance_dev['total']:.3f}")
-        else:
-            h["title"].set_text(f"Shot {shot_id} - loss = {distance_dev['total']:.3f}")
 
         # plt.draw()
         self.root.canvas.draw()  # Update the figure display
