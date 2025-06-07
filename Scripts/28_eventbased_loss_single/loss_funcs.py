@@ -18,6 +18,43 @@ def interpolate_ball(act_t, act_x, act_y, sim_t, sim_x, sim_y):
 
     return t_interp, sim_x_interp, sim_y_interp, act_x_interp, act_y_interp
 
+def interpolate_ball_equidistant(act_t, act_x, act_y, sim_t, sim_x, sim_y):
+    """
+    First create equidistant points along actual trajectory, then interpolate simulated data 
+    to match the time points of the equidistant actual data.
+    
+    Args:
+        act_t, act_x, act_y: Actual ball time and position data
+        sim_t, sim_x, sim_y: Simulated ball time and position data
+    
+    Returns:
+        act_t_interp: Time points from equidistant actual trajectory
+        sim_x_interp, sim_y_interp: Simulated positions interpolated to actual time points
+        act_x_interp, act_y_interp: Actual positions at equidistant points
+    """
+    
+    # Step 1: Calculate cumulative distances for actual trajectory
+    act_dx = np.diff(act_x)
+    act_dy = np.diff(act_y)
+    act_ds = np.sqrt(act_dx**2 + act_dy**2)
+    act_s = np.concatenate([[0], np.cumsum(act_ds)])  # Cumulative distance
+    
+    # Step 2: Create equidistant displacement points along actual trajectory
+    act_smax = act_s[-1]
+    s_interp = np.linspace(0, act_smax, 200)
+    
+    # Step 3: Interpolate actual data to equidistant displacement points
+    act_t_interp = interpolate_coordinate(act_t, act_s, s_interp)
+    act_x_interp = interpolate_coordinate(act_x, act_s, s_interp)
+    act_y_interp = interpolate_coordinate(act_y, act_s, s_interp)
+    
+    # Step 4: Interpolate simulated data to the time points from equidistant actual data
+    sim_x_interp = interpolate_coordinate(sim_x, sim_t, act_t_interp)
+    sim_y_interp = interpolate_coordinate(sim_y, sim_t, act_t_interp)
+
+    # Return in the order expected by calling code: t_interp, sim_x_interp, sim_y_interp, act_t_interp, act_x_interp, act_y_interp
+    return act_t_interp, sim_x_interp, sim_y_interp, act_x_interp, act_y_interp
+
 def calculate_distance_loss(t, act_x, act_y, sim_x, sim_y):
     # calculate loss
     dist = np.sqrt((act_x - sim_x) ** 2 + (act_y - sim_y) ** 2)
@@ -79,10 +116,10 @@ def evaluate_loss(sim_env, shot_actual, method="distance"):
             sim_t = np.array(sim_t)
             sim_x = np.array(sim_x)
             sim_y = np.array(sim_y)
-            t_interp, sim_x_interp, sim_y_interp, act_x_interp, act_y_interp = interpolate_ball(act_t, act_x, act_y, sim_t, sim_x, sim_y)
-
+            # t_interp, sim_x_interp, sim_y_interp, act_x_interp, act_y_interp = interpolate_ball(act_t, act_x, act_y, sim_t, sim_x, sim_y)
+            t_interp, sim_x_interp, sim_y_interp, act_x_interp, act_y_interp = interpolate_ball_equidistant(act_t, act_x, act_y, sim_t, sim_x, sim_y)
             losses =  loss_func_distance(balli, losses, t_interp, sim_x_interp, sim_y_interp, act_x_interp, act_y_interp)
-            
+
 
     # calculate total loss for the ball
     for balli in range(3):
