@@ -24,6 +24,21 @@ class DEOptimizer:
         self.sim_env.balls_xy_ini = balls_xy_ini
         self.sim_env.ball_cols = ball_cols
 
+        # find cue ball in shot_actual, which one startting with 'S'
+        # look in shot_actual['hit'][balli]['with'] for 'S'
+        # if 0 then white, if 1 then yellow, if 2 then red
+        # set self.sim_env.cue_ball to the corresponding ball
+        ball_cols = ["white", "yellow", "red"]
+        cue_ball = None
+        for ball_i in range(len(shot_actual['hit'])):
+            if shot_actual['hit'][ball_i]['with'][0] == 'S':
+                cue_ball = ball_cols[ball_i]
+                break
+
+        if cue_ball is None:
+            raise ValueError("No cue ball found in the shot_actual data. Ensure the shot has a valid cue hit.")
+        self.sim_env.cue.cue_ball_id = cue_ball
+
         self.base_params = copy.deepcopy(params)
         
         # If selected_params is provided, only optimize those parameters
@@ -82,7 +97,7 @@ class DEOptimizer:
         
         self.sim_env.simulate_shot()
 
-        loss = evaluate_loss(self.sim_env, self.shot_actual, method="distance")
+        loss = evaluate_loss(self.sim_env, self.shot_actual, method="eventbased")
 
         return loss["total"]
 

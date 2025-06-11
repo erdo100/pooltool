@@ -258,16 +258,19 @@ class plot_3cushion():
           # Plot menu
         plot_menu = Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Plot", menu=plot_menu)
-        
-        # Initialize marker visibility states
+          # Initialize marker visibility states
         self.marker_visible = {"white": False, "yellow": False, "red": False}
         
-        # Add marker toggle options
+        # Initialize event visibility state
+        self.events_visible = False
+          # Add marker toggle options
         plot_menu.add_command(label="Toggle White Ball Markers", command=lambda: self.toggle_markers("white"))
         plot_menu.add_command(label="Toggle Yellow Ball Markers", command=lambda: self.toggle_markers("yellow"))
         plot_menu.add_command(label="Toggle Red Ball Markers", command=lambda: self.toggle_markers("red"))
         plot_menu.add_separator()
         plot_menu.add_command(label="Toggle All Markers", command=self.toggle_all_markers)
+        plot_menu.add_separator()
+        plot_menu.add_command(label="Toggle Events (Ghost Balls)", command=self.toggle_events)
 
         # Help menu
         help_menu = Menu(menubar, tearoff=0)
@@ -739,11 +742,11 @@ class plot_3cushion():
         if self.loss_calculation_var.get():
             loss_max = 0
             tmax = 0
-            distance_dev = evaluate_loss(self.sim_env, shot_actual, method="distance")
+            # loss = evaluate_loss(self.sim_env, shot_actual, method="distance")
             loss = evaluate_loss(self.sim_env, shot_actual, method="eventbased")
             for i in range(3):
-                h["loss"][i][0].set_data(distance_dev["ball"][i]["time"], distance_dev["ball"][i]["total"])
-                loss_max = max(loss_max, np.max(distance_dev["ball"][i]["total"]))
+                h["loss"][i][0].set_data(loss["ball"][i]["time"], np.cumsum(loss["ball"][i]["total"]))
+                loss_max = max(loss_max, np.sum(loss["ball"][i]["total"]))
                 
                 if loss_max < 0.001:
                     loss_lim = 0.001
@@ -751,13 +754,13 @@ class plot_3cushion():
                     OM = 10**(np.floor(np.log10(loss_max))-1)
                     loss_lim = np.ceil(loss_max/OM*1.1)*OM
 
-                if tmax < max(distance_dev["ball"][i]["time"]):
-                    tmax = max(distance_dev["ball"][i]["time"])
+                if tmax < max(loss["ball"][i]["time"]):
+                    tmax = max(loss["ball"][i]["time"])
 
                 self.root.ax[4].set_xlim((0, tmax ))
                 self.root.ax[4].set_ylim((0, loss_lim ))
 
-            h["title"].set_text(f"Shot {shot_id} - loss = {distance_dev['total']:.3f}")
+            h["title"].set_text(f"Shot {shot_id} - loss = {loss['total']:.3f}")
 
 
         else:
@@ -815,19 +818,9 @@ class plot_3cushion():
             h["spin_roll"][i][0].set_data(tsim, roll_spin)
             h["spin_top"][i][0].set_data(tsim, top_spin)
             h["spin_side"][i][0].set_data(tsim, side_spin)
-
-            OM = 10**(np.floor(np.log10(tmax))-1)
-            tlim = np.ceil(tmax/OM*1.1)*OM
             
-            if vmax < 0.1:
-                vlim = 0.1
-            else:
-                OM = 10**(np.floor(np.log10(vmax))-1)
-                vlim = np.ceil(vmax/OM*1.1)*OM
-
-            self.root.ax[i+1].set_xlim((0, tlim))
-            self.root.ax[i+1].set_ylim((0, vlim ))
-              # Set spin plot limits
+            self.root.ax[i+1].set_xlim((0, tmax))
+            self.root.ax[i+1].set_ylim((0, vmax))            # Set spin plot limits
             spin_values = np.concatenate([roll_spin, top_spin, side_spin])
             if len(spin_values) > 0:
                 spin_max = max(abs(np.min(spin_values)), abs(np.max(spin_values)))
@@ -836,14 +829,81 @@ class plot_3cushion():
                 else:
                     OM_spin = 10**(np.floor(np.log10(spin_max))-1)
                     spin_lim = np.ceil(spin_max/OM_spin*1.1)*OM_spin
-                self.root.ax[i+5].set_xlim((0, tlim))
+                self.root.ax[i+5].set_xlim((0, tmax))
                 self.root.ax[i+5].set_ylim((-spin_lim, spin_lim))
+
+        # Plot events as ghost balls if enabled
+        if hasattr(self, 'events_visible') and self.events_visible:
+            self.plot_events(ax[0], shot_actual)
+        else:
+            # Remove existing event markers if they exist
+            self.remove_event_markers(ax[0])
 
         # plt.draw()
         self.root.canvas.draw()  # Update the figure display
         # Only refresh existing canvas
         self.root.canvas.draw_idle()  # Ensure the canvas is refreshed
         return self.sim_env.system
+
+    def plot_events(self, ax, shot_actual):
+        """Plot events as black ghost balls at event locations."""
+        # Remove existing event markers first
+        self.remove_event_markers(ax)
+        
+        # Get event data from simulation
+        sim_hit = self.sim_env.get_events(self.sim_env)
+        
+        # Store event markers for later removal
+        if not hasattr(self, 'event_markers'):
+            self.event_markers = []
+        
+        ball_radius = 0.0615 / 2  # Standard billiard ball radius in meters
+        
+        # Plot events for each ball
+        colortable = ["white", "yellow", "red"]
+        for ball_i in range(3):
+            # Get actual ball trajectory
+            act_t = np.array(shot_actual['hit'][ball_i]["t"])
+            
+            # Flatten the first element and create a clean list
+            data = shot_actual['hit'][ball_i]["XPos"]
+            clean_data = []
+            for item in data:
+                if isinstance(item, list):
+                    clean_data.extend(item)  # Flatten nested list
+                else:
+                    clean_data.append(item)
+
+            act_x = np.array(clean_data)
+            
+            
+            data = shot_actual['hit'][ball_i]["YPos"]
+            clean_data = []
+            for item in data:
+                if isinstance(item, list):
+                    clean_data.extend(item)  # Flatten nested list
+                else:
+                    clean_data.append(item)
+
+            act_y = np.array(clean_data)
+
+            for event_i in range(len(act_t)):
+                # Create black ghost ball at event location
+                circle = Circle((act_x[event_i], act_y[event_i]), ball_radius, 
+                                color='black', fill=False, linewidth=2, 
+                                linestyle='--', alpha=0.7, zorder=10)
+                ax.add_patch(circle)
+                self.event_markers.append(circle)
+
+    def remove_event_markers(self, ax):
+        """Remove existing event markers from the plot."""
+        if hasattr(self, 'event_markers'):
+            for marker in self.event_markers:
+                try:
+                    marker.remove()
+                except:
+                    pass  # Ignore errors if marker was already removed
+            self.event_markers = []
 
     def toggle_markers(self, ball_color):
         """Toggle markers for a specific ball color."""
@@ -861,4 +921,9 @@ class plot_3cushion():
         for ball_color in self.marker_visible:
             self.marker_visible[ball_color] = new_state
         
+        self.update_plot()
+
+    def toggle_events(self):
+        """Toggle event visibility (ghost balls) on/off."""
+        self.events_visible = not self.events_visible
         self.update_plot()

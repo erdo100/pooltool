@@ -151,8 +151,8 @@ def loss_fun_eventbased(losses, sim_t, balls_rvw, shot_actual, sim_hit, act_hit,
     # run through events based on actual data and simulation data
     for ei in range(nevents):
         allbi = [0, 1, 2]
-        loss_hit_b1 = 0
-        loss_hit_b2 = 0
+        loss_hit_b1 = 1
+        loss_hit_b2 = 1
         loss_distance_b1 = 0
         loss_distance_b2 = 0
         current_time = act_events['times'][ei]
@@ -161,8 +161,8 @@ def loss_fun_eventbased(losses, sim_t, balls_rvw, shot_actual, sim_hit, act_hit,
         ball1i = col.index(act_events['events'][ei][0])
         # check whther secong letter is in col
         if act_events['events'][ei][1] in col:
-            ball2i = col.index(act_events['events'][ei][1])
             hittype = "ball-ball"
+            ball2i = col.index(act_events['events'][ei][1])
             ball3i = 3 - ball1i - ball2i  # the third ball index
         else:
             hittype = "ball-cushion"
@@ -175,6 +175,7 @@ def loss_fun_eventbased(losses, sim_t, balls_rvw, shot_actual, sim_hit, act_hit,
 
             if ei < len(sim_events['events']):
                 loss_distance_b1, current_time = distance_loss_event(ball1i, ei, act_events, sim_events, act_hit, sim_hit, shot_actual, balls_rvw, sim_t)
+                # print(ei, ": loss_distance_b1", loss_distance_b1)
                 loss_distance_b2 = 0
 
                 if hittype == "ball-ball":
@@ -191,17 +192,13 @@ def loss_fun_eventbased(losses, sim_t, balls_rvw, shot_actual, sim_hit, act_hit,
             else:
                 correct_hit = False
 
-        # loss weight based on event index. spread is defining factor between first ei and last ei
-        max_loss_weight = 3
-        min_loss_weight = 1
-        loss_weight = np.clip(max_loss_weight - ei * max_loss_weight, min_loss_weight, max_loss_weight)
-
         # assign the loss
+        # current_time = ei
         losses["ball"][ball1i]["time"].append(current_time)
-        losses["ball"][ball1i]["total"].append(loss_hit_b1 + loss_distance_b1*loss_weight)
+        losses["ball"][ball1i]["total"].append(loss_hit_b1 + loss_distance_b1)
         if hittype == "ball-ball":
             losses["ball"][ball2i]["time"].append(current_time)
-            losses["ball"][ball2i]["total"].append(loss_hit_b2 + loss_distance_b2*loss_weight)
+            losses["ball"][ball2i]["total"].append(loss_hit_b2 + loss_distance_b2)
         else:
             losses["ball"][ball2i]["time"].append(current_time)
             losses["ball"][ball2i]["total"].append(0)
@@ -242,10 +239,8 @@ def distance_loss_event(balli, ei, act_events, sim_events, act_hit, sim_hit, sho
     act_y_interp = interpolate_coordinate(y1, t1, tloss)
 
     # calculate loss
-    distance = np.sqrt((act_x_interp - sim_x_interp) ** 2 + (act_y_interp - sim_y_interp) ** 2)*1000
-    rms = np.sqrt(np.mean(distance**2))
-    # normalize by the length of the actual and simulated path
-    loss_distance = rms / len(tloss)
+    distance = np.sqrt((act_x_interp - sim_x_interp) ** 2 + (act_y_interp - sim_y_interp) ** 2)
+    loss_distance = np.sqrt(np.mean(distance**2))
 
 
     # if ei is the last event of that ball, then calculate loss diatnce from the last event until end of time
@@ -302,9 +297,9 @@ def distance_loss_event(balli, ei, act_events, sim_events, act_hit, sim_hit, sho
 
         # calculate loss
         distance = np.sqrt((act_x_interp - sim_x_interp) ** 2 + (act_y_interp - sim_y_interp) ** 2)
-        loss_distance += np.sum(distance)/2.84/len(tloss)
+        loss_distance += np.sqrt(np.mean(distance**2))
 
-    return loss_distance, tmax
+    return loss_distance, t1[-1]
 
 
 def interpolate_coordinate(simulated, tsim, actual_times):
