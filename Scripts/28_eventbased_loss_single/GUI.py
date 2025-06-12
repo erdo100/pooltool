@@ -7,7 +7,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 from matplotlib.figure import Figure
 from matplotlib.patches import Circle
 from tkinter import *
-from tkinter import Menu
+from tkinter import Menu, ttk
 
 import pooltool as pt
 from helper_funcs import get_ball_spins, run_study, get_ball_positions, open_shotfile, save_parameters, load_parameters, save_system, abs_velocity
@@ -66,9 +66,7 @@ class plot_3cushion():
         
           # Loss calculation checkbox frame (at the very top)
         loss_checkbox_frame = Frame(left_frame)
-        loss_checkbox_frame.pack(side=TOP, fill=X, pady=(5, 10))
-        
-        # Loss calculation checkbox
+        loss_checkbox_frame.pack(side=TOP, fill=X, pady=(5, 10))          # Loss calculation checkbox
         self.loss_calculation_var = BooleanVar(value=True)  # Default to checked
         self.loss_calculation_checkbox = Checkbutton(
             loss_checkbox_frame, 
@@ -76,7 +74,19 @@ class plot_3cushion():
             variable=self.loss_calculation_var,
             command=self.update_plot
         )
-        self.loss_calculation_checkbox.pack(anchor='w', padx=5)
+        self.loss_calculation_checkbox.pack(side=LEFT, padx=5)
+        
+        # Loss method dropdown menu (directly to the right of checkbox)
+        self.loss_method = StringVar(value="EquiDistant+EventBased")  # Default method
+        self.loss_method_dropdown = ttk.Combobox(
+            loss_checkbox_frame,
+            textvariable=self.loss_method,
+            values=["Distance", "EquiDistant", "DistanceEventBased", "EquiDistant+EventBased"],
+            state="readonly",
+            width=15
+        )
+        self.loss_method_dropdown.pack(side=LEFT, padx=5)
+        self.loss_method_dropdown.bind("<<ComboboxSelected>>", lambda e: self.update_plot())
         
         # Slider frame
         slider_frame = Frame(left_frame)
@@ -253,9 +263,15 @@ class plot_3cushion():
         # Tools menu
         tools_menu = Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Tools", menu=tools_menu)
-        tools_menu.add_command(label="Run Phi Study", command=lambda: run_study(self.SA, self.params))
+        # Defer reading the selected loss method until menu command is invoked
+        tools_menu.add_command(
+            label="Run Phi Study",
+            command=lambda: run_study(self.SA, self.params, self.loss_method.get())
+        )
         tools_menu.add_command(label="Start Optimization", command=self.start_optimization)
-          # Plot menu
+        
+        
+        # Plot menu
         plot_menu = Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Plot", menu=plot_menu)
           # Initialize marker visibility states
@@ -671,10 +687,12 @@ class plot_3cushion():
             print("Invalid population size entered. Using default value of 50.")
             popsize = 50
         
-        print(f"Using population size: {popsize}")
-        
+        # Get the selected loss method from dropdown
+        selected_method = self.loss_method.get()
+
         optimizer = DEOptimizer(shot_actual, self.params, balls_xy_ini, ball_cols, 
-                               maxiter=totalruns, selected_params=selected_params, popsize=popsize)
+                               maxiter=totalruns, loss_method=selected_method, selected_params=selected_params, popsize=popsize)
+        
         # try:
         result, best_params = optimizer.run_optimization()
         # Get best parameters and update sliders
@@ -736,14 +754,13 @@ class plot_3cushion():
         self.sim_env.ball_cols = ball_cols
         self.sim_env.balls_xy_ini = ball_xy_ini
         self.sim_env.prepare_new_shot(self.params)
-        self.sim_env.simulate_shot()
-
-        # calculate the reward conditionally based on checkbox state
+        self.sim_env.simulate_shot()        # calculate the reward conditionally based on checkbox state
         if self.loss_calculation_var.get():
             loss_max = 0
             tmax = 0
-            # loss = evaluate_loss(self.sim_env, shot_actual, method="distance")
-            loss = evaluate_loss(self.sim_env, shot_actual, method="eventbased")
+            # Get the selected loss method from dropdown
+            selected_method = self.loss_method.get()
+            loss = evaluate_loss(self.sim_env, shot_actual, method=selected_method)
             for i in range(3):
                 h["loss"][i][0].set_data(loss["ball"][i]["time"], np.cumsum(loss["ball"][i]["total"]))
                 loss_max = max(loss_max, np.sum(loss["ball"][i]["total"]))
@@ -927,3 +944,4 @@ class plot_3cushion():
         """Toggle event visibility (ghost balls) on/off."""
         self.events_visible = not self.events_visible
         self.update_plot()
+

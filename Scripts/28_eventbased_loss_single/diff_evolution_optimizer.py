@@ -14,9 +14,9 @@ from billiardenv import BilliardEnv
 from helper_funcs import get_ball_positions
 
 class DEOptimizer:
-    def __init__(self, shot_actual, params, balls_xy_ini, ball_cols, maxiter, selected_params=None,
-                 popsize=50, mutation=(1.0, 1.0), recombination=0.5, 
-                 strategy='best1bin', polish=False):
+    def __init__(self, shot_actual, params, balls_xy_ini, ball_cols, maxiter, loss_method, selected_params=None,
+                 popsize=50, mutation=(1.5, 1.0), recombination=0.9, 
+                 strategy='best1bin', tolerance=0.0001, polish=False):
 
         self.sim_env = BilliardEnv()
         self.shot_actual = shot_actual
@@ -50,18 +50,20 @@ class DEOptimizer:
         
         self.bounds = []
         for key in self.selected_params:
-            if key == "shot_phi":
+            if key == "shot_phi1":
                 # Modify the limit for shot_phi as needed, e.g.:
                 self.bounds.append((self.base_params.value[key]-6, self.base_params.value[key]+6))  # Example: set to [-pi, pi]
             else:
                 self.bounds.append(self.base_params.limits[key])
 
         self.maxiter = maxiter
+        self.loss_method = loss_method
         self.pop_size = popsize
         self.mutation = mutation
         self.recombination = recombination
         self.strategy = strategy
         self.polish = polish
+        self.tolerance = tolerance
         self.parameter_history = []
         self.loss_history = []
         self.opt_fig = None  # Initialize to None to prevent accidental figure creation
@@ -97,7 +99,7 @@ class DEOptimizer:
         
         self.sim_env.simulate_shot()
 
-        loss = evaluate_loss(self.sim_env, self.shot_actual, method="eventbased")
+        loss = evaluate_loss(self.sim_env, self.shot_actual, method=self.loss_method)
 
         return loss["total"]
 
@@ -213,6 +215,8 @@ class DEOptimizer:
             init_population = np.vstack([my_candidate_scaled, random_samples])
 
         result = None
+        # start timing the optimization
+        start_time = time.time()
 
         bounds_scaled = [(0, 1)] * len(self.bounds)
         result = differential_evolution(
@@ -225,13 +229,17 @@ class DEOptimizer:
             popsize=self.pop_size,  # Use first element for population size
             updating='deferred',
             callback=self.callback_fn,
-            tol=0.0001,
+            tol=self.tolerance,
             polish=self.polish,
             disp=False,
             init=init_population,
             workers=-1
         )
 
+        # end timing the optimization
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        
         # for gen in range(self.maxiter):
         #     curr_pop = int(self.pop_start + (self.pop_end - self.pop_start) * gen / self.maxiter)
         #     mut = self.mut_start + (self.mut_end - self.mut_start) * (gen / self.maxiter)
@@ -276,5 +284,6 @@ class DEOptimizer:
             self.opt_fig = None  # Set to None to prevent reuse
             plt.ioff()  # Ensure interactive mode is off
         
+        print(f"Optimization completed in {elapsed_time:.2f} seconds.")
         print("Optimization completed!")
         return result, best_params

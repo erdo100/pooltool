@@ -36,7 +36,7 @@ class Parameters:
             # Shot parameters
             'shot_a': (-0.5, 0.5),
             'shot_b': (-0.5, 0.5),
-            'shot_phi': (-180, 180),
+            'shot_phi': (-185, 185),
             'shot_v': (2.0, 7.0),
             'shot_theta': (0.0, 10.0),
 

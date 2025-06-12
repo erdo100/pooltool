@@ -192,7 +192,7 @@ def get_ball_spins(rvw):
 
 
 
-def run_study(SA, params):
+def run_study(SA, params, method):
     print('Running study with parameters:')
     # Retrieve current shot and slider values
     shot_id = params.value['shot_id']
@@ -207,8 +207,6 @@ def run_study(SA, params):
 
     steps = 1000
     total_loss = np.zeros(steps)
-    angle_loss = np.zeros(steps)
-    distance_loss = np.zeros(steps)
     phi_range = np.linspace(-180, 180, steps)
         
     for i, phi in enumerate(phi_range):
@@ -217,7 +215,7 @@ def run_study(SA, params):
         sim_env.prepare_new_shot(params)
         sim_env.simulate_shot()
 
-        loss = evaluate_loss(sim_env, shot_actual, method="eventbased")
+        loss = evaluate_loss(sim_env, shot_actual, method)
 
         for balli in range(3):
             total_loss[i] += np.sum(loss["ball"][balli]["total"])
